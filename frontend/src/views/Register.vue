@@ -84,6 +84,7 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import axios from 'axios'
 
 const router = useRouter()
 const loading = ref(false)
@@ -106,12 +107,29 @@ const handleRegister = async () => {
   }
   
   loading.value = true
-  // 模拟注册请求
-  setTimeout(() => {
+  try {
+    // 假设 FastAPI 运行在 8000 端口
+    const response = await axios.post('http://localhost:8000/api/v1/auth/register', {
+      email: form.email,
+      username: form.username,
+      password: form.password
+    })
+    
+    if (response.data.code === 200) {
+      ElMessage.success('注册成功，请登录')
+      router.push('/login')
+    } else {
+      ElMessage.error(response.data.message || '注册失败')
+    }
+  } catch (error) {
+    if (error.response && error.response.data && error.response.data.detail) {
+      ElMessage.error(error.response.data.detail)
+    } else {
+      ElMessage.error('网络请求失败，请稍后重试')
+    }
+  } finally {
     loading.value = false
-    ElMessage.success('注册成功，请登录')
-    router.push('/login')
-  }, 800)
+  }
 }
 </script>
 

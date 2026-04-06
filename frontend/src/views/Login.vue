@@ -66,6 +66,7 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import axios from 'axios'
 
 const router = useRouter()
 const loading = ref(false)
@@ -82,12 +83,29 @@ const handleLogin = async () => {
   }
   
   loading.value = true
-  // 模拟登录请求
-  setTimeout(() => {
+  try {
+    const response = await axios.post('http://localhost:8000/api/v1/auth/login', {
+      username: form.username,
+      password: form.password
+    })
+    
+    if (response.data.code === 200) {
+      ElMessage.success('登录成功')
+      
+      // 保存 token 和用户信息到 localStorage
+      localStorage.setItem('token', response.data.data.accessToken)
+      localStorage.setItem('user', JSON.stringify(response.data.data.user))
+      
+      router.push('/dashboard')
+    } else {
+      // 后端返回的业务错误 (如：用户名密码错误)
+      ElMessage.error(response.data.message || '登录失败')
+    }
+  } catch (error) {
+    ElMessage.error('网络请求失败，请检查服务是否启动')
+  } finally {
     loading.value = false
-    ElMessage.success('登录成功')
-    router.push('/dashboard')
-  }, 800)
+  }
 }
 </script>
 
