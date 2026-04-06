@@ -1,0 +1,19 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+:root {
+  /* 自定义蓝色主色调 (参考新设计图) */
+  --el-color-primary: #3b82f6;
+  --el-color-primary-light-3: #60a5fa;
+  --el-color-primary-light-5: #93c5fd;
+  --el-color-primary-light-7: #bfdbfe;
+  --el-color-primary-light-9: #eff6ff;
+  --el-color-primary-dark-2: #2563eb;
+  
+  --el-bg-color-page: #f4f6f8;
+}
+
+body {
+  @apply bg-[#f4f6f8] text-gray-800 m-0 p-0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', STHeiti, 'Microsoft Yahei', Tahoma, Simsun, sans-serif;
+}
