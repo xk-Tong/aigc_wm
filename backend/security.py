@@ -1,40 +1,37 @@
+import os
 import bcrypt
-from jose import jwt
+from jose import jwt, JWTError
 from datetime import datetime, timedelta
+from typing import Optional
 
-# JWT 配置
-SECRET_KEY = "your-super-secret-key-please-change-it" 
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-super-secret-key-please-change-it-in-production")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 24小时
+ACCESS_TOKEN_EXPIRE_HOURS = 24
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """验证密码是否正确"""
-    # bcrypt 要求输入必须是 bytes 类型
     password_bytes = plain_password.encode('utf-8')
     hashed_password_bytes = hashed_password.encode('utf-8')
-    
     try:
         return bcrypt.checkpw(password_bytes, hashed_password_bytes)
-    except ValueError:
-        # 如果哈希值格式不对等导致 ValueError，直接返回验证失败
+    except (ValueError, AttributeError):
         return False
 
 def get_password_hash(password: str) -> str:
-    """生成密码哈希"""
-    # bcrypt 限制最大长度为 72 bytes，对超长密码进行截断（避免抛出异常）
+    if len(password) < 8:
+        raise ValueError("密码长度至少8位")
     password_bytes = password.encode('utf-8')[:72]
-    
-    # 生成盐并计算哈希
     salt = bcrypt.gensalt()
-    hashed_password = bcrypt.hashpw(password_bytes, salt)
-    
-    # 将 bytes 解码回字符串，方便存入数据库
-    return hashed_password.decode('utf-8')
+    return bcrypt.hashpw(password_bytes, salt).decode('utf-8')
 
-def create_access_token(data: dict):
-    """生成 JWT 令牌"""
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+    expire = datetime.utcnow() + (expires_delta or timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS))
+    to_encode.update({"exp": expire, "iat": datetime.utcnow()})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+def decode_token(token: str) -> Optional[dict]:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except JWTError:
+        return None

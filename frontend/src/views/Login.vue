@@ -102,7 +102,11 @@ const handleLogin = async () => {
       ElMessage.error(response.data.message || '登录失败')
     }
   } catch (error) {
-    ElMessage.error('网络请求失败，请检查服务是否启动')
+    if (error.response && error.response.data) {
+      ElMessage.error(error.response.data.detail || '登录失败')
+    } else {
+      ElMessage.error('网络请求失败，请检查服务是否启动')
+    }
   } finally {
     loading.value = false
   }
