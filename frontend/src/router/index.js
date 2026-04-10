@@ -28,7 +28,7 @@ const router = createRouter({
         {
           path: 'image-wm/embed',
           name: 'image-embed',
-          component: () => import('../views/Placeholder.vue'),
+          component: () => import('../views/ImageEmbed.vue'),
           meta: { title: '图像水印嵌入' }
         },
         {
