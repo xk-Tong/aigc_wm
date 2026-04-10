@@ -34,19 +34,19 @@ const router = createRouter({
         {
           path: 'image-wm/extract',
           name: 'image-extract',
-          component: () => import('../views/Placeholder.vue'),
+          component: () => import('../views/ImageExtract.vue'),
           meta: { title: '图像水印提取' }
         },
         {
           path: 'pointcloud-wm/embed',
           name: 'pointcloud-embed',
-          component: () => import('../views/Placeholder.vue'),
+          component: () => import('../views/PointcloudEmbed.vue'),
           meta: { title: '点云水印嵌入' }
         },
         {
           path: 'pointcloud-wm/extract',
           name: 'pointcloud-extract',
-          component: () => import('../views/Placeholder.vue'),
+          component: () => import('../views/PointcloudExtract.vue'),
           meta: { title: '点云水印提取' }
         },
         {
