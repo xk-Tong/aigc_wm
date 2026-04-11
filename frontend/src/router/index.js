@@ -52,13 +52,13 @@ const router = createRouter({
         {
           path: 'mesh-wm/embed',
           name: 'mesh-embed',
-          component: () => import('../views/Placeholder.vue'),
+          component: () => import('../views/MeshEmbed.vue'),
           meta: { title: '网格水印嵌入' }
         },
         {
           path: 'mesh-wm/extract',
           name: 'mesh-extract',
-          component: () => import('../views/Placeholder.vue'),
+          component: () => import('../views/MeshExtract.vue'),
           meta: { title: '网格水印提取' }
         },
         {

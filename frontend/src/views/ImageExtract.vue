@@ -72,7 +72,7 @@
         <el-button 
           type="primary" 
           size="large" 
-          class="w-full !h-14 !text-lg !rounded-xl shadow-lg shadow-blue-500/30 transition-all"
+          class="w-full h-14! text-lg! rounded-xl! shadow-lg shadow-blue-500/30 transition-all"
           :disabled="!uploadedFileUrl"
           :loading="isExtracting"
           @click="startExtraction"

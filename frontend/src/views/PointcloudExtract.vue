@@ -186,7 +186,9 @@ import { ref, computed, onBeforeUnmount, shallowRef, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-
+//引入点云加载器
+import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js'
+import { PCDLoader } from 'three/examples/jsm/loaders/PCDLoader.js'
 // --- 状态数据 ---
 const uploadedFile = ref(null)
 const fileInfo = ref({ name: '', size: '', pointsCount: '0' })
@@ -248,7 +250,8 @@ const handleFileChange = (uploadFile) => {
   // 初始化 3D 预览
   nextTick(() => {
     initThree()
-    createMockPointCloud()
+    // createMockPointCloud()
+    loadUserPointCloud(file)
   })
 }
 
@@ -324,6 +327,8 @@ const initThree = () => {
   controls.value = new OrbitControls(camera.value, renderer.value.domElement)
   controls.value.enableDamping = true
   controls.value.dampingFactor = 0.05
+  controls.value.autoRotate = true 
+  controls.value.autoRotateSpeed = 2.0
 
   window.addEventListener('resize', onWindowResize)
   animate()
@@ -333,9 +338,9 @@ const animate = () => {
   animationFrameId = requestAnimationFrame(animate)
   if (controls.value) controls.value.update()
   if (renderer.value && scene.value && camera.value) {
-    if (pointsObject.value) {
-      pointsObject.value.rotation.y += 0.001 // 缓慢旋转
-    }
+    // if (pointsObject.value) {
+    //   pointsObject.value.rotation.y += 0.001 // 缓慢旋转
+    // }
     renderer.value.render(scene.value, camera.value)
   }
 }
@@ -395,6 +400,57 @@ const createMockPointCloud = () => {
   // 调整一下初始角度
   pointsObject.value.rotation.x = Math.PI / 4
   scene.value.add(pointsObject.value)
+}
+
+// 加载用户真实上传的点云文件
+const loadUserPointCloud = (file) => {
+  const url = URL.createObjectURL(file)
+  const ext = file.name.split('.').pop().toLowerCase()
+
+  // 居中并缩放的通用处理函数
+  const processAndAddGeometry = (geometry) => {
+    geometry.center() // 居中
+    geometry.computeBoundingSphere()
+    const radius = geometry.boundingSphere.radius
+    const scale = 2 / (radius || 1) // 缩放到半径约为 2 的大小
+
+    // 如果模型自带颜色则使用自带颜色，否则使用统一颜色
+    const hasColor = geometry.hasAttribute('color')
+    const material = new THREE.PointsMaterial({ 
+      size: 0.03 / scale, // 根据缩放比例调整点的大小
+      vertexColors: hasColor,
+      color: hasColor ? 0xffffff : 0x4f46e5, // 没有颜色时默认用靛蓝色
+      transparent: true,
+      opacity: 0.8
+    })
+
+    pointsObject.value = new THREE.Points(geometry, material)
+    pointsObject.value.scale.setScalar(scale)
+    pointsObject.value.rotation.x = -Math.PI / 2
+    scene.value.add(pointsObject.value)
+  }
+
+  if (ext === 'ply') {
+    new PLYLoader().load(url, (geometry) => {
+      processAndAddGeometry(geometry)
+      URL.revokeObjectURL(url) // 释放内存
+    })
+  } else if (ext === 'pcd') {
+    new PCDLoader().load(url, (points) => {
+      // PCDLoader 直接返回 Points 对象
+      pointsObject.value = points
+      points.geometry.center()
+      points.geometry.computeBoundingSphere()
+      const scale = 2 / (points.geometry.boundingSphere.radius || 1)
+      points.scale.setScalar(scale)
+      points.material.size = 0.03 / scale
+      points.rotation.x = -Math.PI / 2
+      scene.value.add(points)
+      URL.revokeObjectURL(url)
+    })
+  } else {
+    ElMessage.warning('当前预览仅支持 .ply 和 .pcd 格式，其他格式暂不渲染')
+  }
 }
 
 const disposeThree = () => {
