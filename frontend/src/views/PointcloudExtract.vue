@@ -203,6 +203,7 @@ const renderer = shallowRef(null)
 const controls = shallowRef(null)
 const pointsObject = shallowRef(null)
 let animationFrameId = null
+let activeLoadToken = 0
 
 // --- 计算属性 ---
 const fileExtension = computed(() => {
@@ -321,7 +322,7 @@ const initThree = () => {
 
   renderer.value = new THREE.WebGLRenderer({ antialias: true })
   renderer.value.setSize(width, height)
-  renderer.value.setPixelRatio(window.devicePixelRatio)
+  renderer.value.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
   canvasContainer.value.appendChild(renderer.value.domElement)
 
   controls.value = new OrbitControls(camera.value, renderer.value.domElement)
@@ -404,11 +405,23 @@ const createMockPointCloud = () => {
 
 // 加载用户真实上传的点云文件
 const loadUserPointCloud = (file) => {
+  const loadToken = ++activeLoadToken
   const url = URL.createObjectURL(file)
   const ext = file.name.split('.').pop().toLowerCase()
 
   // 居中并缩放的通用处理函数
   const processAndAddGeometry = (geometry) => {
+    if (loadToken !== activeLoadToken || !scene.value) {
+      geometry.dispose?.()
+      return
+    }
+
+    if (pointsObject.value && scene.value) {
+      scene.value.remove(pointsObject.value)
+      disposeObject3D(pointsObject.value)
+      pointsObject.value = null
+    }
+
     geometry.center() // 居中
     geometry.computeBoundingSphere()
     const radius = geometry.boundingSphere.radius
@@ -434,33 +447,82 @@ const loadUserPointCloud = (file) => {
     new PLYLoader().load(url, (geometry) => {
       processAndAddGeometry(geometry)
       URL.revokeObjectURL(url) // 释放内存
+    }, undefined, () => {
+      URL.revokeObjectURL(url)
+      if (loadToken === activeLoadToken) {
+        ElMessage.error('PLY 文件加载失败，请检查文件是否损坏')
+      }
     })
   } else if (ext === 'pcd') {
     new PCDLoader().load(url, (points) => {
+      if (loadToken !== activeLoadToken || !scene.value) {
+        disposeObject3D(points)
+        return
+      }
+
+      if (pointsObject.value && scene.value) {
+        scene.value.remove(pointsObject.value)
+        disposeObject3D(pointsObject.value)
+        pointsObject.value = null
+      }
+
       // PCDLoader 直接返回 Points 对象
       pointsObject.value = points
       points.geometry.center()
       points.geometry.computeBoundingSphere()
       const scale = 2 / (points.geometry.boundingSphere.radius || 1)
       points.scale.setScalar(scale)
-      points.material.size = 0.03 / scale
+      if (points.material && !Array.isArray(points.material)) {
+        points.material.size = 0.03 / scale
+      }
       points.rotation.x = -Math.PI / 2
       scene.value.add(points)
       URL.revokeObjectURL(url)
+    }, undefined, () => {
+      URL.revokeObjectURL(url)
+      if (loadToken === activeLoadToken) {
+        ElMessage.error('PCD 文件加载失败，请检查文件是否损坏')
+      }
     })
   } else {
+    URL.revokeObjectURL(url)
     ElMessage.warning('当前预览仅支持 .ply 和 .pcd 格式，其他格式暂不渲染')
   }
 }
 
+const disposeMaterial = (material) => {
+  if (!material) return
+  if (Array.isArray(material)) {
+    material.forEach((item) => item?.dispose?.())
+    return
+  }
+  material.dispose?.()
+}
+
+const disposeObject3D = (object) => {
+  object?.traverse?.((child) => {
+    if (child.isMesh || child.isPoints || child.isLine) {
+      child.geometry?.dispose?.()
+      disposeMaterial(child.material)
+    }
+  })
+}
+
 const disposeThree = () => {
+  activeLoadToken += 1
+
   if (animationFrameId) cancelAnimationFrame(animationFrameId)
+  animationFrameId = null
   window.removeEventListener('resize', onWindowResize)
+
+  if (controls.value) {
+    controls.value.dispose()
+    controls.value = null
+  }
   
   if (pointsObject.value) {
-    pointsObject.value.geometry.dispose()
-    pointsObject.value.material.dispose()
     if (scene.value) scene.value.remove(pointsObject.value)
+    disposeObject3D(pointsObject.value)
     pointsObject.value = null
   }
   
@@ -475,7 +537,6 @@ const disposeThree = () => {
   
   scene.value = null
   camera.value = null
-  controls.value = null
 }
 
 onBeforeUnmount(() => {

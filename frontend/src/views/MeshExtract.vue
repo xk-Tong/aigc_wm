@@ -217,6 +217,7 @@ const meshObject = shallowRef(null)
 
 /** requestAnimationFrame 返回的动画帧 ID，用于组件卸载时取消动画 */
 let animationFrameId = null
+let activeLoadToken = 0
 
 // ==================== 计算属性 ====================
 
@@ -254,13 +255,22 @@ const formattedWatermark = computed(() => result.value?.watermark ? result.value
  * @param {Object} uploadFile - Element Plus 上传组件的 file 对象
  */
 const handleFileChange = (uploadFile) => {
-  uploadedFile.value = uploadFile.raw
+  const file = uploadFile.raw
+  if (!file) return
+
+  // 校验大小（100MB）避免主线程解析过大模型导致页面长时间卡顿
+  if (file.size > 100 * 1024 * 1024) {
+    ElMessage.error('网格文件大小不能超过 100MB！')
+    return
+  }
+
+  uploadedFile.value = file
 
   // 计算文件大小，支持 MB 和 KB 两种单位
-  const sizeMB = (uploadFile.raw.size / (1024 * 1024)).toFixed(2)
+  const sizeMB = (file.size / (1024 * 1024)).toFixed(2)
   fileInfo.value = {
-    name: uploadFile.raw.name,
-    size: sizeMB > 1 ? `${sizeMB} MB` : `${(uploadFile.raw.size / 1024).toFixed(2)} KB`,
+    name: file.name,
+    size: sizeMB > 1 ? `${sizeMB} MB` : `${(file.size / 1024).toFixed(2)} KB`,
     // 模拟面片数：实际项目中应从文件解析得出
     facesCount: (Math.floor(Math.random() * 20000) + 5000).toLocaleString()
   }
@@ -269,7 +279,10 @@ const handleFileChange = (uploadFile) => {
   result.value = null
 
   // 等待 DOM 更新后初始化 Three.js
-  nextTick(() => { initThree(); loadUserMesh(uploadFile.raw) })
+  nextTick(() => {
+    initThree()
+    loadUserMesh(file)
+  })
 }
 
 /**
@@ -348,6 +361,7 @@ const initThree = () => {
   // 创建 WebGL 渲染器，启动抗锯齿
   renderer.value = new THREE.WebGLRenderer({ antialias: true })
   renderer.value.setSize(width, height)
+  renderer.value.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
   canvasContainer.value.appendChild(renderer.value.domElement)
 
   // 创建轨道控制器，支持鼠标交互
@@ -414,6 +428,7 @@ const createMockMesh = () => {
 
 // 【修改】加载用户真实上传的网格文件
 const loadUserMesh = (file) => {
+  const loadToken = ++activeLoadToken
   const url = URL.createObjectURL(file)
   const ext = file.name.split('.').pop().toLowerCase()
 
@@ -426,6 +441,14 @@ const loadUserMesh = (file) => {
 
   // 居中并缩放的通用处理函数
   const processAndAddObject = (object) => {
+    if (loadToken !== activeLoadToken || !scene.value) return
+
+    if (meshObject.value && scene.value) {
+      scene.value.remove(meshObject.value)
+      disposeObject3D(meshObject.value)
+      meshObject.value = null
+    }
+
     // 计算包围盒
     const box = new THREE.Box3().setFromObject(object)
     const center = box.getCenter(new THREE.Vector3())
@@ -454,6 +477,11 @@ const loadUserMesh = (file) => {
       })
       processAndAddObject(group)
       URL.revokeObjectURL(url)
+    }, undefined, () => {
+      URL.revokeObjectURL(url)
+      if (loadToken === activeLoadToken) {
+        ElMessage.error('OBJ 文件加载失败，请检查文件是否损坏')
+      }
     })
   } else if (ext === 'stl') {
     new STLLoader().load(url, (geometry) => {
@@ -461,10 +489,34 @@ const loadUserMesh = (file) => {
       const mesh = new THREE.Mesh(geometry, defaultMaterial)
       processAndAddObject(mesh)
       URL.revokeObjectURL(url)
+    }, undefined, () => {
+      URL.revokeObjectURL(url)
+      if (loadToken === activeLoadToken) {
+        ElMessage.error('STL 文件加载失败，请检查文件是否损坏')
+      }
     })
   } else {
+    URL.revokeObjectURL(url)
     ElMessage.warning('当前预览仅支持 .obj 和 .stl 格式，其他格式暂不渲染')
   }
+}
+
+const disposeMaterial = (material) => {
+  if (!material) return
+  if (Array.isArray(material)) {
+    material.forEach((item) => item?.dispose?.())
+    return
+  }
+  material.dispose?.()
+}
+
+const disposeObject3D = (object) => {
+  object.traverse((child) => {
+    if (child.isMesh || child.isPoints || child.isLine) {
+      child.geometry?.dispose?.()
+      disposeMaterial(child.material)
+    }
+  })
 }
 /**
  * 切换线框模式
@@ -487,24 +539,39 @@ const toggleWireframe = () => {
  * 在移除文件或组件卸载时调用
  */
 const disposeThree = () => {
+  // 使旧加载回调失效，避免场景销毁后异步回调继续写入
+  activeLoadToken += 1
+
   // 取消动画帧
   if (animationFrameId) cancelAnimationFrame(animationFrameId)
+  animationFrameId = null
 
   // 移除窗口 resize 监听
   window.removeEventListener('resize', onWindowResize)
 
+  if (controls.value) {
+    controls.value.dispose()
+    controls.value = null
+  }
+
   // 释放几何体和材质内存
   if (meshObject.value) {
-    meshObject.value.geometry.dispose()
-    meshObject.value.material.dispose()
+    if (scene.value) scene.value.remove(meshObject.value)
+    disposeObject3D(meshObject.value)
+    meshObject.value = null
   }
 
   // 销毁渲染器
   if (renderer.value) {
     renderer.value.dispose()
+    renderer.value.forceContextLoss?.()
     // 清空渲染容器的子元素（canvas）
     if (canvasContainer.value) canvasContainer.value.innerHTML = ''
+    renderer.value = null
   }
+
+  scene.value = null
+  camera.value = null
 }
 
 /**
