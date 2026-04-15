@@ -33,7 +33,7 @@
             <!-- 2. 模型选择 -->
             <el-form-item label="生成模型">
               <el-select v-model="formData.model" size="large" class="w-full">
-                <el-option label="FLUX.1 " value="flux1" />
+                <el-option label="FLUX.2 " value="flux2" />
                 <el-option label="Stable Diffusion 3.5" value="sd3.5" />
               </el-select>
             </el-form-item>
@@ -184,7 +184,7 @@ import { ElMessage } from 'element-plus'
 // 表单数据
 const formData = ref({
   prompt: '',
-  model: 'flux1',
+  model: 'flux2',
   watermark: ''
 })
 
