@@ -71,7 +71,7 @@
         </div>
 
         <!-- 可选：最近生成历史 -->
-        <div class="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
+        <!-- <div class="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
           <h3 class="text-md font-bold text-gray-800 mb-4">最近生成历史</h3>
           <div class="space-y-3">
             <div v-for="i in 3" :key="i" class="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-xl cursor-pointer transition-colors">
@@ -84,7 +84,7 @@
               </div>
             </div>
           </div>
-        </div>
+        </div> -->
       </div>
 
       <!-- ================= 右侧栏：结果预览区域 ================= -->

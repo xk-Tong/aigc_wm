@@ -272,7 +272,8 @@ const handleFileChange = (uploadFile) => {
     name: file.name,
     size: sizeMB > 1 ? `${sizeMB} MB` : `${(file.size / 1024).toFixed(2)} KB`,
     // 模拟面片数：实际项目中应从文件解析得出
-    facesCount: (Math.floor(Math.random() * 20000) + 5000).toLocaleString()
+    // facesCount: (Math.floor(Math.random() * 20000) + 5000).toLocaleString()
+    facesCount: '计算中...' // 先显示计算中
   }
 
   // 清空之前的提取结果
@@ -432,6 +433,16 @@ const loadUserMesh = (file) => {
   const url = URL.createObjectURL(file)
   const ext = file.name.split('.').pop().toLowerCase()
 
+  // 🌟 新增：计算单个几何体面片数的辅助函数
+  const calculateFaces = (geometry) => {
+    if (geometry.index) {
+      return geometry.index.count / 3
+    } else if (geometry.attributes.position) {
+      return geometry.attributes.position.count / 3
+    }
+    return 0
+  }
+
   const defaultMaterial = new THREE.MeshStandardMaterial({ 
     color: 0x0d9488, // 默认青绿色
     roughness: 0.4,
@@ -475,6 +486,15 @@ const loadUserMesh = (file) => {
       group.traverse((child) => {
         if (child.isMesh) child.material = defaultMaterial
       })
+      // 🌟 新增：统计 OBJ 模型中所有子网格的面片总数
+      let totalFaces = 0
+      group.traverse((child) => {
+        if (child.isMesh) {
+          child.material = defaultMaterial
+          totalFaces += calculateFaces(child.geometry)
+        }
+      })
+      fileInfo.value.facesCount = totalFaces.toLocaleString() // 更新真实面数
       processAndAddObject(group)
       URL.revokeObjectURL(url)
     }, undefined, () => {
@@ -485,6 +505,8 @@ const loadUserMesh = (file) => {
     })
   } else if (ext === 'stl') {
     new STLLoader().load(url, (geometry) => {
+      fileInfo.value.facesCount = calculateFaces(geometry).toLocaleString()
+      
       // STLLoader 返回的是 BufferGeometry
       const mesh = new THREE.Mesh(geometry, defaultMaterial)
       processAndAddObject(mesh)

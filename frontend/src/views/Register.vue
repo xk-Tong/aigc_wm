@@ -96,23 +96,56 @@ const form = reactive({
   confirmPassword: ''
 })
 
+const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+
+const getErrorMessage = (error) => {
+  const detail = error?.response?.data?.detail
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => item?.msg || item?.message || '请求参数不正确')
+      .join('；')
+  }
+  if (typeof detail === 'string' && detail) {
+    return detail
+  }
+  if (typeof error?.response?.data?.message === 'string' && error.response.data.message) {
+    return error.response.data.message
+  }
+  return '网络请求失败，请稍后重试'
+}
+
 const handleRegister = async () => {
-  if (!form.email || !form.username || !form.password) {
+  const email = form.email.trim()
+  const username = form.username.trim()
+  const password = form.password
+
+  if (!email || !username || !password) {
     ElMessage.warning('请填写完整信息')
     return
   }
-  if (form.password !== form.confirmPassword) {
+  if (!isValidEmail(email)) {
+    ElMessage.warning('请输入正确的邮箱格式')
+    return
+  }
+  if (username.length < 3) {
+    ElMessage.warning('用户名至少 3 个字符')
+    return
+  }
+  if (password.length < 8) {
+    ElMessage.warning('密码至少 8 个字符')
+    return
+  }
+  if (password !== form.confirmPassword) {
     ElMessage.warning('两次输入的密码不一致')
     return
   }
   
   loading.value = true
   try {
-    // 假设 FastAPI 运行在 8000 端口
     const response = await axios.post('http://localhost:8000/api/v1/auth/register', {
-      email: form.email,
-      username: form.username,
-      password: form.password
+      email,
+      username,
+      password
     })
     
     if (response.data.code === 200) {
@@ -122,11 +155,7 @@ const handleRegister = async () => {
       ElMessage.error(response.data.message || '注册失败')
     }
   } catch (error) {
-    if (error.response && error.response.data && error.response.data.detail) {
-      ElMessage.error(error.response.data.detail)
-    } else {
-      ElMessage.error('网络请求失败，请稍后重试')
-    }
+    ElMessage.error(getErrorMessage(error))
   } finally {
     loading.value = false
   }

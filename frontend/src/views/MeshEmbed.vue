@@ -75,9 +75,8 @@
             <!-- 4. 模型选择：选择用于生成网格的 AI 模型 -->
             <el-form-item label="生成模型">
               <el-select v-model="formData.model" size="large" class="w-full">
-                <el-option label="Mesh-Diffusion (推荐)" value="mesh-diff" />
-                <el-option label="Get3D" value="get3d" />
-                <el-option label="DreamFusion" value="dreamfusion" />
+                <el-option label="Trellis (推荐)" value="trellis" />
+                <el-option label="ShapE" value="shapE" />
               </el-select>
             </el-form-item>
 
@@ -250,7 +249,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 const formData = ref({
   inputType: 'text',
   prompt: '',
-  model: 'mesh-diff',
+  model: 'trellis',
   watermark: ''
 })
 

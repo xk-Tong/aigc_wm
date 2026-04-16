@@ -243,7 +243,8 @@ const handleFileChange = (uploadFile) => {
   fileInfo.value = {
     name: file.name,
     size: sizeMB > 1 ? `${sizeMB} MB` : `${(file.size / 1024).toFixed(2)} KB`,
-    pointsCount: (Math.floor(Math.random() * 500000) + 50000).toLocaleString() // 模拟点数
+    // pointsCount: (Math.floor(Math.random() * 500000) + 50000).toLocaleString() // 模拟点数
+    pointsCount: '计算中...'
   }
   
   result.value = null
@@ -318,7 +319,7 @@ const initThree = () => {
   const width = canvasContainer.value.clientWidth
   const height = canvasContainer.value.clientHeight
   camera.value = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000)
-  camera.value.position.set(0, 0, 4)
+  camera.value.position.set(0, 0, 5)
 
   renderer.value = new THREE.WebGLRenderer({ antialias: true })
   renderer.value.setSize(width, height)
@@ -328,8 +329,9 @@ const initThree = () => {
   controls.value = new OrbitControls(camera.value, renderer.value.domElement)
   controls.value.enableDamping = true
   controls.value.dampingFactor = 0.05
-  controls.value.autoRotate = true 
-  controls.value.autoRotateSpeed = 2.0
+  controls.value.autoRotate = false
+  controls.value.target.set(0, 0, 0)
+  // controls.value.autoRotateSpeed = 2.0
 
   window.addEventListener('resize', onWindowResize)
   animate()
@@ -422,10 +424,14 @@ const loadUserPointCloud = (file) => {
       pointsObject.value = null
     }
 
-    geometry.center() // 居中
-    geometry.computeBoundingSphere()
-    const radius = geometry.boundingSphere.radius
-    const scale = 2 / (radius || 1) // 缩放到半径约为 2 的大小
+    geometry.computeBoundingBox()
+    const box = geometry.boundingBox
+    const center = box.getCenter(new THREE.Vector3())
+    const size = box.getSize(new THREE.Vector3()).length()
+
+    // 与网格页一致：基于包围盒做居中和统一缩放
+    geometry.translate(-center.x, -center.y, -center.z)
+    const scale = 4 / (size || 1)
 
     // 如果模型自带颜色则使用自带颜色，否则使用统一颜色
     const hasColor = geometry.hasAttribute('color')
@@ -439,12 +445,13 @@ const loadUserPointCloud = (file) => {
 
     pointsObject.value = new THREE.Points(geometry, material)
     pointsObject.value.scale.setScalar(scale)
-    pointsObject.value.rotation.x = -Math.PI / 2
+    pointsObject.value.rotation.x = Math.PI
     scene.value.add(pointsObject.value)
   }
 
   if (ext === 'ply') {
     new PLYLoader().load(url, (geometry) => {
+      fileInfo.value.pointsCount = geometry.attributes.position.count.toLocaleString()
       processAndAddGeometry(geometry)
       URL.revokeObjectURL(url) // 释放内存
     }, undefined, () => {
@@ -455,6 +462,9 @@ const loadUserPointCloud = (file) => {
     })
   } else if (ext === 'pcd') {
     new PCDLoader().load(url, (points) => {
+      fileInfo.value.pointsCount = points.geometry.attributes.position.count.toLocaleString()
+      
+      pointsObject.value = points
       if (loadToken !== activeLoadToken || !scene.value) {
         disposeObject3D(points)
         return
@@ -468,14 +478,17 @@ const loadUserPointCloud = (file) => {
 
       // PCDLoader 直接返回 Points 对象
       pointsObject.value = points
-      points.geometry.center()
-      points.geometry.computeBoundingSphere()
-      const scale = 2 / (points.geometry.boundingSphere.radius || 1)
+      const box = new THREE.Box3().setFromObject(points)
+      const center = box.getCenter(new THREE.Vector3())
+      const size = box.getSize(new THREE.Vector3()).length()
+
+      points.position.sub(center)
+      const scale = 4 / (size || 1)
       points.scale.setScalar(scale)
+      points.rotation.x = Math.PI
       if (points.material && !Array.isArray(points.material)) {
         points.material.size = 0.03 / scale
       }
-      points.rotation.x = -Math.PI / 2
       scene.value.add(points)
       URL.revokeObjectURL(url)
     }, undefined, () => {
