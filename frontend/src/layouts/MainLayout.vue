@@ -33,7 +33,7 @@
               <el-icon><Picture /></el-icon>
               <span>图像水印</span>
             </template>
-            <el-menu-item index="/image-wm/embed">水印嵌入</el-menu-item>
+            <el-menu-item index="/image-wm/embed">生成图像</el-menu-item>
             <el-menu-item index="/image-wm/extract">水印提取</el-menu-item>
           </el-sub-menu>
 
@@ -42,7 +42,7 @@
               <el-icon><Location /></el-icon>
               <span>点云水印</span>
             </template>
-            <el-menu-item index="/pointcloud-wm/embed">水印嵌入</el-menu-item>
+            <el-menu-item index="/pointcloud-wm/embed">生成点云</el-menu-item>
             <el-menu-item index="/pointcloud-wm/extract">水印提取</el-menu-item>
           </el-sub-menu>
 
@@ -51,7 +51,7 @@
               <el-icon><Box /></el-icon>
               <span>网格水印</span>
             </template>
-            <el-menu-item index="/mesh-wm/embed">水印嵌入</el-menu-item>
+            <el-menu-item index="/mesh-wm/embed">生成网格</el-menu-item>
             <el-menu-item index="/mesh-wm/extract">水印提取</el-menu-item>
           </el-sub-menu>
 

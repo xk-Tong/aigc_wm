@@ -1,10 +1,11 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, Any
+from typing import Any
 
-class ResponseModel(BaseModel):
+class ApiResponse(BaseModel):
     code: int
     message: str
-    data: Optional[Any] = None
+    data: Any = Field(default_factory=dict)
+    timestamp: str
 
 class UserRegister(BaseModel):
     email: EmailStr = Field(..., description="电子邮箱")
