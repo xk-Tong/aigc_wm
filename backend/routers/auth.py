@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Header, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.db_conf import get_db
@@ -6,6 +9,20 @@ from crud import auth as crud_auth
 from schemas.auth import ApiResponse, UserRegister, UserLogin
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+
+
+def _extract_token(authorization: Optional[str]) -> Optional[str]:
+    if not authorization:
+        return None
+
+    value = authorization.strip()
+    if not value:
+        return None
+
+    if value.lower().startswith("bearer "):
+        value = value[7:].strip()
+
+    return value or None
 
 
 @router.post("/register", response_model=ApiResponse)
@@ -22,7 +39,7 @@ async def register(user_in: UserRegister, db: AsyncSession = Depends(get_db)):
 
     try:
         new_user = await crud_auth.create_user(db, user_in)
-    except Exception:
+    except IntegrityError:
         raise HTTPException(status_code=400, detail="用户名或邮箱已被注册")
 
     return {
@@ -47,7 +64,11 @@ async def login(user_in: UserLogin, db: AsyncSession = Depends(get_db)):
     if user.status == 0:
         raise HTTPException(status_code=403, detail="该账号已被禁用")
 
-    access_token = await crud_auth.generate_access_token(user)
+    try:
+        access_token = await crud_auth.generate_access_token(user)
+    except RuntimeError:
+        raise HTTPException(status_code=503, detail="登录服务暂不可用，请稍后再试")
+
     user_info = crud_auth.get_user_info(user)
 
     return {
@@ -58,4 +79,51 @@ async def login(user_in: UserLogin, db: AsyncSession = Depends(get_db)):
             "user": user_info.model_dump()
         },
         "timestamp": crud_auth.get_current_timestamp()
+    }
+
+
+@router.post("/verify-token", response_model=ApiResponse)
+async def verify_token(authorization: Optional[str] = Header(default=None)):
+    token = _extract_token(authorization)
+    if not token:
+        return {
+            "code": 200,
+            "message": "success",
+            "data": {"valid": False},
+            "timestamp": crud_auth.get_current_timestamp(),
+        }
+
+    session_data = await crud_auth.verify_session_token(token, refresh_ttl=True)
+    if not session_data:
+        return {
+            "code": 200,
+            "message": "success",
+            "data": {"valid": False},
+            "timestamp": crud_auth.get_current_timestamp(),
+        }
+
+    return {
+        "code": 200,
+        "message": "success",
+        "data": {
+            "valid": True,
+            "user": session_data,
+        },
+        "timestamp": crud_auth.get_current_timestamp(),
+    }
+
+
+@router.post("/logout", response_model=ApiResponse)
+async def logout(authorization: Optional[str] = Header(default=None)):
+    token = _extract_token(authorization)
+
+    deleted = False
+    if token:
+        deleted = await crud_auth.delete_session_token(token)
+
+    return {
+        "code": 200,
+        "message": "success",
+        "data": {"success": True, "revoked": deleted},
+        "timestamp": crud_auth.get_current_timestamp(),
     }

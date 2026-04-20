@@ -108,11 +108,22 @@
 
 <script setup>
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import request from '../utils/request'
 
 const router = useRouter()
 
-const handleLogout = () => {
-  router.push('/login')
+const handleLogout = async () => {
+  try {
+    await request.post('/api/v1/auth/logout')
+  } catch (error) {
+    // 登出是幂等操作，后端失败不阻断前端清理登录态。
+  } finally {
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    ElMessage.success('已退出登录')
+    router.push('/login')
+  }
 }
 </script>
 

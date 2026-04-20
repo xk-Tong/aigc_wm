@@ -66,7 +66,7 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import axios from 'axios'
+import request from '../utils/request'
 
 const router = useRouter()
 const loading = ref(false)
@@ -84,7 +84,7 @@ const handleLogin = async () => {
   
   loading.value = true
   try {
-    const response = await axios.post('http://localhost:8000/api/v1/auth/login', {
+    const response = await request.post('/api/v1/auth/login', {
       username: form.username,
       password: form.password
     })

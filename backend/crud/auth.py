@@ -1,13 +1,24 @@
 from datetime import datetime, timezone
+import json
 from typing import Optional
 
 from sqlalchemy import select, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config.cache_conf import redis_client
 from models import auth
 from schemas.auth import UserRegister, UserInfo
-from utils.security import get_password_hash, verify_password, create_access_token
+from utils.security import (
+    SESSION_TOKEN_TTL_SECONDS,
+    create_session_token,
+    get_password_hash,
+    verify_password,
+)
+
+
+def _build_session_key(token: str) -> str:
+    return f"session:{token}"
 
 
 async def get_user_by_username_or_email(db: AsyncSession, username: str, email: str) -> Optional[auth.User]:
@@ -105,9 +116,79 @@ async def generate_access_token(user: auth.User) -> str:
         user: 用户对象
         
     Returns:
-        str: JWT访问令牌
+        str: UUID 会话令牌
     """
-    return create_access_token(data={"sub": user.username, "id": user.id})
+    token = create_session_token()
+    session_key = f"session:{token}"
+    session_payload = {
+        "id": user.id,
+        "username": user.username,
+        "role": user.role,
+        "status": user.status,
+    }
+
+    try:
+        # 登录成功后将会话信息写入 Redis，并设置统一会话过期时间。
+        await redis_client.setex(
+            session_key,
+            SESSION_TOKEN_TTL_SECONDS,
+            json.dumps(session_payload, ensure_ascii=False),
+        )
+    except Exception as exc:
+        raise RuntimeError("会话写入缓存失败") from exc
+
+    return token
+
+
+async def verify_session_token(token: str, refresh_ttl: bool = True) -> Optional[dict]:
+    """
+    校验 Redis 会话 token，并按需刷新过期时间。
+
+    Args:
+        token: 客户端传入的会话 token
+        refresh_ttl: 是否在校验成功后刷新 TTL
+
+    Returns:
+        Optional[dict]: 校验成功返回会话数据，失败返回 None
+    """
+    if not token:
+        return None
+
+    session_key = _build_session_key(token)
+
+    try:
+        session_raw = await redis_client.get(session_key)
+        if not session_raw:
+            return None
+
+        session_data = json.loads(session_raw)
+        if refresh_ttl:
+            await redis_client.expire(session_key, SESSION_TOKEN_TTL_SECONDS)
+        return session_data
+    except Exception:
+        return None
+
+
+async def delete_session_token(token: str) -> bool:
+    """
+    删除 Redis 中的会话 token。
+
+    Args:
+        token: 客户端传入的会话 token
+
+    Returns:
+        bool: 删除成功或 token 已不存在时返回 False/True 由调用方决定
+    """
+    if not token:
+        return False
+
+    session_key = _build_session_key(token)
+
+    try:
+        deleted_count = await redis_client.delete(session_key)
+        return deleted_count > 0
+    except Exception:
+        return False
 
 
 def get_user_info(user: auth.User) -> UserInfo:

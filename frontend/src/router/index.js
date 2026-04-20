@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import MainLayout from '../layouts/MainLayout.vue'
+import request from '../utils/request'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -94,6 +95,36 @@ const router = createRouter({
       ]
     }
   ]
+})
+
+const WHITE_LIST = ['/login', '/register']
+
+router.beforeEach(async (to) => {
+  const token = localStorage.getItem('token')
+
+  if (WHITE_LIST.includes(to.path)) {
+    if (token && to.path === '/login') {
+      return '/dashboard'
+    }
+    return true
+  }
+
+  if (!token) {
+    return '/login'
+  }
+
+  try {
+    const response = await request.post('/api/v1/auth/verify-token')
+    if (response?.data?.data?.valid) {
+      return true
+    }
+  } catch (error) {
+    // ignore and fallback to re-login
+  }
+
+  localStorage.removeItem('token')
+  localStorage.removeItem('user')
+  return '/login'
 })
 
 export default router
