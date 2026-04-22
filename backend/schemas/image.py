@@ -1,0 +1,39 @@
+from pydantic import BaseModel, Field
+
+
+class GenerateWatermarkedImageRequest(BaseModel):
+    """前端提交“生成含水印图像”时的请求体。"""
+
+    # 提示词：描述想生成的画面内容。
+    prompt: str = Field(..., min_length=1, max_length=2000)
+    # 模型名称：用于告诉算法侧选哪个模型。
+    model: str = Field(default="flux2")
+    # 32 位二进制水印内容，例如 0101...
+    watermark_bits: str = Field(..., pattern=r"^[01]{32}$")
+    # 输出分辨率（宽高）。
+    width: int = Field(default=1024, ge=256, le=4096)
+    height: int = Field(default=1024, ge=256, le=4096)
+    # 可选随机种子：固定后通常可复现结果。
+    seed: int | None = None
+    # 水印强度：0-1，值越大通常越明显。
+    strength: float = Field(default=0.5, ge=0.0, le=1.0)
+
+
+class GenerateWatermarkedImageResponse(BaseModel):
+    """业务后端返回给前端的图像生成结果。"""
+
+    # 图片唯一 ID，可用于后续追踪或扩展任务系统。
+    image_id: str
+    # 前端展示用 URL。
+    image_url: str
+    # 前端下载用 URL（当前与 image_url 一致，后续可分离）。
+    download_url: str
+    # 回显实际嵌入的水印内容。
+    watermark_bits: str
+    # 处理耗时（毫秒）。
+    elapsed_ms: int
+    # 生成时间（UTC 字符串）。
+    generated_at: str
+    model: str
+    width: int
+    height: int

@@ -140,7 +140,7 @@
               </span>
               <div class="flex gap-3">
                 <el-button plain round @click="handleGenerate">重新生成</el-button>
-                <el-button type="primary" round class="shadow-md shadow-blue-500/20">
+                <el-button type="primary" round class="shadow-md shadow-blue-500/20" @click="handleDownload">
                   <el-icon class="mr-1"><Download /></el-icon> 下载图像
                 </el-button>
               </div>
@@ -180,15 +180,16 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
+import request from '../utils/request'
 
-// 表单数据
+// 用户在页面输入的生成参数。
 const formData = ref({
   prompt: '',
   model: 'flux2',
   watermark: ''
 })
 
-// 状态控制
+// 页面运行状态：是否在生成、当前结果、图片缩放倍数。
 const isGenerating = ref(false)
 const result = ref(null)
 const zoomLevel = ref(1)
@@ -223,13 +224,24 @@ const zoomIn = () => { zoomLevel.value = Math.min(zoomLevel.value + 0.2, 3) }
 const zoomOut = () => { zoomLevel.value = Math.max(zoomLevel.value - 0.2, 0.5) }
 const resetZoom = () => { zoomLevel.value = 1 }
 
-// 模拟生成请求
-const handleGenerate = () => {
+// 下载按钮逻辑：直接打开后端返回的下载地址。
+const handleDownload = () => {
+  if (!result.value?.downloadUrl) {
+    ElMessage.warning('暂无可下载图像')
+    return
+  }
+
+  window.open(result.value.downloadUrl, '_blank', 'noopener,noreferrer')
+}
+
+// 主流程：提交生成请求 -> 接收结果 -> 更新页面展示。
+const handleGenerate = async () => {
+  // 前端基础校验，尽早提示用户输入错误。
   if (!formData.value.prompt) {
     ElMessage.warning('请输入提示词')
     return
   }
-  if (!formData.value.watermark || formData.value.watermark.length !== 32) {
+  if (!/^[01]{32}$/.test(formData.value.watermark || '')) {
     ElMessage.warning('请输入有效的 32 位二进制水印')
     return
   }
@@ -238,21 +250,39 @@ const handleGenerate = () => {
   result.value = null
   resetZoom()
 
-  // 模拟网络请求延迟 (2.5秒)
-  setTimeout(() => {
+  try {
+    // 把页面字段映射为后端接口字段。
+    const response = await request.post('/api/v1/image/generate-watermarked', {
+      prompt: formData.value.prompt,
+      model: formData.value.model,
+      watermark_bits: formData.value.watermark,
+      width: 1024,
+      height: 1024,
+      strength: 0.5,
+    })
+
+    const payload = response?.data || {}
     isGenerating.value = false
-    
-    // 构造模拟结果数据
-    const now = new Date()
+
+    // 把后端返回数据转换成页面需要的展示结构。
+    const generatedAt = payload.generated_at ? new Date(payload.generated_at) : new Date()
     result.value = {
-      imageUrl: 'https://picsum.photos/seed/' + Math.random() + '/800/600', // 随机占位图
-      watermark: formData.value.watermark,
-      timeTaken: (Math.random() * 5 + 8).toFixed(1), // 模拟 8-13秒 耗时
-      timestamp: now.toLocaleString('zh-CN', { hour12: false })
+      imageUrl: payload.image_url,
+      downloadUrl: payload.download_url || payload.image_url,
+      watermark: payload.watermark_bits || formData.value.watermark,
+      timeTaken: ((payload.elapsed_ms || 0) / 1000).toFixed(1),
+      timestamp: generatedAt.toLocaleString('zh-CN', { hour12: false })
     }
-    
+
     ElMessage.success('图像生成并嵌入水印成功！')
-  }, 2500)
+  } catch (err) {
+    // 统一错误提示：优先展示后端 detail，其次展示通用错误。
+    isGenerating.value = false
+
+    const message =
+      err?.response?.data?.detail || err?.message || '图像生成失败，请稍后重试'
+    ElMessage.error(message)
+  }
 }
 </script>
 

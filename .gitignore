@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *.pyc
+backend/storage/
 
 # Frontend
 frontend/node_modules/

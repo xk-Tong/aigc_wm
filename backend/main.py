@@ -1,9 +1,21 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import auth
+from fastapi.staticfiles import StaticFiles
 
+from config.service_conf import BIZ_IMAGE_STORAGE_ROOT
+from routers import auth, image
+
+# 创建 FastAPI 应用并挂载业务路由。
 app = FastAPI()
 app.include_router(auth.router)
+app.include_router(image.router)
+
+# 启动时确保图片存储目录存在，并把该目录映射为可访问的静态资源路径。
+Path(BIZ_IMAGE_STORAGE_ROOT).mkdir(parents=True, exist_ok=True)
+app.mount("/storage", StaticFiles(directory=BIZ_IMAGE_STORAGE_ROOT), name="storage")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,4 +26,5 @@ app.add_middleware(
 
 @app.get("/")
 def read_root():
+    # 基础健康返回，便于快速确认服务已启动。
     return {"Hello": "World"}
