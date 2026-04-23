@@ -16,8 +16,8 @@ class GenerateRequest(BaseModel):
     prompt: str = Field(..., min_length=1, max_length=2000)
     model: str = Field(default="flux2")
     watermark_bits: str = Field(..., pattern=r"^[01]{32}$")
-    width: int = Field(default=2048)
-    height: int = Field(default=2048)
+    width: int = Field(default=1024)
+    height: int = Field(default=1024)
     guidance_scale: float = Field(default=1.0)
 
 

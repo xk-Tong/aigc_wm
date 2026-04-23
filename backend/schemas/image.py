@@ -11,8 +11,8 @@ class GenerateWatermarkedImageRequest(BaseModel):
     # 32 位二进制水印内容，例如 0101...
     watermark_bits: str = Field(..., pattern=r"^[01]{32}$")
     # 输出分辨率（宽高）。
-    width: int = Field(default=2048, ge=256, le=4096)
-    height: int = Field(default=2048, ge=256, le=4096)
+    width: int = Field(default=1024, ge=256, le=2048)
+    height: int = Field(default=1024, ge=256, le=2048)
     # 生成引导系数：用于控制提示词对结果的影响程度。
     guidance_scale: float = Field(default=1.0, ge=0.0, le=20.0)
 
