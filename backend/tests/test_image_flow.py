@@ -29,8 +29,6 @@ class TestImageRouter(unittest.IsolatedAsyncioTestCase):
             prompt="a cat",
             model="flux2",
             watermark_bits="01010101010101010101010101010101",
-            width=1024,
-            height=1024,
         )
 
         encoded = base64.b64encode(b"fake-png-bytes").decode("utf-8")
@@ -44,8 +42,8 @@ class TestImageRouter(unittest.IsolatedAsyncioTestCase):
                 return_value={
                     "result_image_base64": encoded,
                     "image_format": "png",
-                    "width": 1024,
-                    "height": 1024,
+                    "width": 2048,
+                    "height": 2048,
                     "elapsed_ms": 1200,
                 }
             ),
@@ -66,8 +64,6 @@ class TestImageRouter(unittest.IsolatedAsyncioTestCase):
             prompt="a cat",
             model="flux2",
             watermark_bits="01010101010101010101010101010101",
-            width=1024,
-            height=1024,
         )
 
         with self.assertRaises(HTTPException) as ctx:
@@ -84,8 +80,6 @@ class TestImageRouter(unittest.IsolatedAsyncioTestCase):
             prompt="a cat",
             model="flux2",
             watermark_bits="01010101010101010101010101010101",
-            width=1024,
-            height=1024,
         )
 
         with patch(

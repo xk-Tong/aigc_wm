@@ -256,9 +256,9 @@ const handleGenerate = async () => {
       prompt: formData.value.prompt,
       model: formData.value.model,
       watermark_bits: formData.value.watermark,
-      width: 1024,
-      height: 1024,
-      strength: 0.5,
+      width: 2048,
+      height: 2048,
+      guidance_scale: 1.0,
     })
 
     const payload = response?.data || {}

@@ -16,10 +16,9 @@ class GenerateRequest(BaseModel):
     prompt: str = Field(..., min_length=1, max_length=2000)
     model: str = Field(default="flux2")
     watermark_bits: str = Field(..., pattern=r"^[01]{32}$")
-    width: int = Field(default=1024)
-    height: int = Field(default=1024)
-    seed: int | None = None
-    strength: float = Field(default=0.5)
+    width: int = Field(default=2048)
+    height: int = Field(default=2048)
+    guidance_scale: float = Field(default=1.0)
 
 
 def _load_test_image_base64() -> str:
@@ -71,7 +70,6 @@ async def generate(request: GenerateRequest):
             "prompt": request.prompt,
             "model": request.model,
             "watermark_bits": request.watermark_bits,
-            "seed": request.seed,
-            "strength": request.strength,
+            "guidance_scale": request.guidance_scale,
         },
     }
