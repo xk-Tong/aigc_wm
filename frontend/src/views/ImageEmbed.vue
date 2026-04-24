@@ -16,9 +16,16 @@
         <div class="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
           <h3 class="text-lg font-bold text-gray-800 mb-5">生成参数配置</h3>
           
-          <el-form label-position="top" class="space-y-4">
+          <el-form
+            ref="generateFormRef"
+            :model="formData"
+            :rules="formRules"
+            status-icon
+            label-position="top"
+            class="space-y-4"
+          >
             <!-- 1. Prompt 输入框 -->
-            <el-form-item label="提示词 (Prompt)">
+            <el-form-item label="提示词 (Prompt)" prop="prompt">
               <el-input
                 v-model="formData.prompt"
                 type="textarea"
@@ -39,7 +46,7 @@
             </el-form-item>
 
             <!-- 3. 水印信息输入 -->
-            <el-form-item label="水印信息 (32位二进制)">
+            <el-form-item label="水印信息 (32位二进制)" prop="watermark">
               <div class="flex gap-2 w-full">
                 <el-input
                   v-model="formData.watermark"
@@ -54,7 +61,50 @@
               </div>
             </el-form-item>
 
-            <!-- 4. 生成按钮 -->
+            <!-- 4. 图像尺寸与引导尺度 -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <el-form-item label="宽度 width (像素)" prop="width" class="!mb-0">
+                <el-input-number
+                  v-model="formData.width"
+                  :min="512"
+                  :max="2048"
+                  :step="64"
+                  :precision="0"
+                  controls-position="right"
+                  size="large"
+                  class="w-full param-input-number"
+                />
+              </el-form-item>
+
+              <el-form-item label="高度 height (像素)" prop="height" class="!mb-0">
+                <el-input-number
+                  v-model="formData.height"
+                  :min="512"
+                  :max="2048"
+                  :step="64"
+                  :precision="0"
+                  controls-position="right"
+                  size="large"
+                  class="w-full param-input-number"
+                />
+              </el-form-item>
+            </div>
+
+            <el-form-item label="引导尺度 guidance_scale (0-20)" prop="guidance_scale">
+              <el-input-number
+                v-model="formData.guidance_scale"
+                :min="0"
+                :max="20"
+                :step="0.1"
+                :precision="1"
+                controls-position="right"
+                size="large"
+                class="w-full param-input-number"
+              />
+              <div class="text-xs text-gray-400 mt-1">建议范围 0.0 - 20.0，默认值 1.0</div>
+            </el-form-item>
+
+            <!-- 5. 生成按钮 -->
             <div class="pt-4">
               <el-button 
                 type="primary" 
@@ -186,8 +236,66 @@ import request from '../utils/request'
 const formData = ref({
   prompt: '',
   model: 'flux2',
-  watermark: ''
+  watermark: '',
+  width: 1024,
+  height: 1024,
+  guidance_scale: 1.0,
 })
+
+const generateFormRef = ref()
+
+const validateIntegerRange = (label, min, max) => (_rule, value, callback) => {
+  if (value === undefined || value === null || value === '') {
+    callback(new Error(`请输入${label}`))
+    return
+  }
+  if (!Number.isInteger(value)) {
+    callback(new Error(`${label}必须为整数`))
+    return
+  }
+  if (value < min || value > max) {
+    callback(new Error(`${label}需在 ${min}-${max} 之间`))
+    return
+  }
+  callback()
+}
+
+const validateNumberRange = (label, min, max) => (_rule, value, callback) => {
+  if (value === undefined || value === null || value === '') {
+    callback(new Error(`请输入${label}`))
+    return
+  }
+  if (Number.isNaN(Number(value))) {
+    callback(new Error(`${label}必须为数字`))
+    return
+  }
+  const numericValue = Number(value)
+  if (numericValue < min || numericValue > max) {
+    callback(new Error(`${label}需在 ${min}-${max} 之间`))
+    return
+  }
+  callback()
+}
+
+const formRules = {
+  prompt: [
+    { required: true, message: '请输入提示词', trigger: 'blur' },
+    { min: 1, max: 2000, message: '提示词长度需在 1-2000 字符之间', trigger: 'blur' },
+  ],
+  watermark: [
+    { required: true, message: '请输入 32 位二进制水印', trigger: 'blur' },
+    { pattern: /^[01]{32}$/, message: '请输入有效的 32 位二进制水印', trigger: 'blur' },
+  ],
+  width: [
+    { validator: validateIntegerRange('宽度', 512, 2048), trigger: ['blur', 'change'] },
+  ],
+  height: [
+    { validator: validateIntegerRange('高度', 512, 2048), trigger: ['blur', 'change'] },
+  ],
+  guidance_scale: [
+    { validator: validateNumberRange('引导尺度', 0, 20), trigger: ['blur', 'change'] },
+  ],
+}
 
 // 页面运行状态：是否在生成、当前结果、图片缩放倍数。
 const isGenerating = ref(false)
@@ -236,13 +344,10 @@ const handleDownload = () => {
 
 // 主流程：提交生成请求 -> 接收结果 -> 更新页面展示。
 const handleGenerate = async () => {
-  // 前端基础校验，尽早提示用户输入错误。
-  if (!formData.value.prompt) {
-    ElMessage.warning('请输入提示词')
-    return
-  }
-  if (!/^[01]{32}$/.test(formData.value.watermark || '')) {
-    ElMessage.warning('请输入有效的 32 位二进制水印')
+  try {
+    await generateFormRef.value.validate()
+  } catch (_err) {
+    ElMessage.warning('请先修正参数输入后再生成图像')
     return
   }
 
@@ -256,9 +361,9 @@ const handleGenerate = async () => {
       prompt: formData.value.prompt,
       model: formData.value.model,
       watermark_bits: formData.value.watermark,
-      width: 1024,
-      height: 1024,
-      guidance_scale: 1.0,
+      width: formData.value.width,
+      height: formData.value.height,
+      guidance_scale: formData.value.guidance_scale,
     })
 
     const payload = response?.data || {}
@@ -316,5 +421,35 @@ const handleGenerate = async () => {
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
   border-color: #3b82f6;
   background-color: #ffffff;
+}
+
+/* 数值输入框：视觉与页面已有输入风格统一，并强化焦点态反馈。 */
+:deep(.param-input-number.el-input-number) {
+  width: 100%;
+}
+:deep(.param-input-number .el-input__wrapper) {
+  background-color: #f8fafc;
+  border-radius: 0.75rem;
+  box-shadow: none;
+  border: 1px solid #e2e8f0;
+  transition: all 0.2s ease;
+}
+:deep(.param-input-number .el-input__wrapper:hover) {
+  border-color: #cbd5e1;
+}
+:deep(.param-input-number .el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  border-color: #3b82f6;
+  background-color: #ffffff;
+}
+:deep(.param-input-number .el-input-number__increase),
+:deep(.param-input-number .el-input-number__decrease) {
+  background-color: #ffffff;
+  color: #64748b;
+  border-left: 1px solid #e2e8f0;
+}
+:deep(.param-input-number .el-input-number__increase:hover),
+:deep(.param-input-number .el-input-number__decrease:hover) {
+  color: #2563eb;
 }
 </style>
