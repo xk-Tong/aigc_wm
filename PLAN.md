@@ -55,13 +55,13 @@
 | GET | `/algo/v1/health` | 健康检查 | 无 | 服务状态、模型就绪信息 |
 | POST | `/algo/v1/generate` | 图像生成 | JSON 参数 | `result_image_base64`, `image_meta` |
 | POST | `/algo/v1/watermark/embed` | 水印嵌入 | 文件 + 参数 | `result_image_base64`, `metrics` |
-| POST | `/algo/v1/watermark/extract` | 水印提取 | 文件 + 参数 | `extracted_watermark`, `confidence`, `metrics` |
+| POST | `/algo/v1/watermark/extract` | 水印提取 | 文件 + 参数 | `extracted_watermark`, `metrics` |
 | POST | `/algo/v1/watermark/verify` | 水印验真 | 文件 + 参数 | `verified`, `confidence`, `match_detail`, `metrics` |
 
 ## 关键流程
 - 上传嵌入：前端上传图片到业务后端，业务后端保存本地文件与 `files` 记录；前端提交嵌入任务；后台执行器读取文件并调用算法服务；成功后保存含水印图片，写入 `result_file_id` 和指标。
 - AIGC 生成：前端提交生成任务；业务后端创建任务并调用算法服务生成；返回图像后落盘为 `GENERATED` 文件，可继续用于嵌入。
-- 提取/验真：前端选择目标文件发起任务；算法服务返回提取文本或验真结论；业务后端将结果写入 `task_results.result_payload`，供任务详情页展示。
+- 提取/验真：前端选择目标文件发起任务；算法服务返回 32 位水印或验真结论；业务后端将结果写入 `task_results.result_payload`，供任务详情页展示。
 - 错误策略：算法服务超时、参数校验失败、模型内部异常都映射为业务后端统一错误码；任务状态置 `FAILED`，保留 `error_message` 便于排查。
 
 ## 测试与验收

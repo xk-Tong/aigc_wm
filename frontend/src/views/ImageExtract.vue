@@ -165,10 +165,12 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
+import request from '../utils/request'
 
 // 文件相关状态
 const uploadedFileUrl = ref('')
 const fileInfo = ref({ name: '', size: '' })
+const uploadedFile = ref(null)
 
 // 提取状态
 const isExtracting = ref(false)
@@ -193,7 +195,11 @@ const handleFileChange = (uploadFile) => {
   }
 
   // 生成本地预览 URL
+  if (uploadedFileUrl.value) {
+    URL.revokeObjectURL(uploadedFileUrl.value)
+  }
   uploadedFileUrl.value = URL.createObjectURL(file)
+  uploadedFile.value = file
   
   // 格式化文件大小
   const sizeMB = (file.size / (1024 * 1024)).toFixed(2)
@@ -212,6 +218,7 @@ const removeFile = () => {
     URL.revokeObjectURL(uploadedFileUrl.value) // 释放内存
   }
   uploadedFileUrl.value = ''
+  uploadedFile.value = null
   fileInfo.value = { name: '', size: '' }
   result.value = null
 }
@@ -240,39 +247,45 @@ const copyWatermark = async () => {
   }
 }
 
-// 模拟提取过程
-const startExtraction = () => {
-  if (!uploadedFileUrl.value) return
+// 向业务后端提交图像提取请求，并把结果展示到页面上。
+const startExtraction = async () => {
+  if (!uploadedFile.value) return
 
   isExtracting.value = true
   result.value = null
 
-  // 模拟网络请求延迟 (2秒)
-  setTimeout(() => {
-    isExtracting.value = false
-    
-    // 模拟 90% 概率成功，10% 概率失败
-    const isSuccess = Math.random() > 0.1
+  try {
+    const formData = new FormData()
+    formData.append('image_file', uploadedFile.value)
 
-    if (isSuccess) {
-      // 随机生成一个 32 位二进制作为提取结果
-      let binaryStr = ''
-      for (let i = 0; i < 32; i++) binaryStr += Math.random() > 0.5 ? '1' : '0'
-      
-      result.value = {
-        status: 'success',
-        watermark: binaryStr,
-        timeTaken: (Math.random() * 2 + 1.5).toFixed(2) // 1.5s - 3.5s
-      }
-      ElMessage.success('水印提取成功！')
-    } else {
-      result.value = {
-        status: 'error',
-        message: '未检测到有效的水印信息，或图像已被严重破坏。'
-      }
-      ElMessage.error('提取失败')
+    const response = await request.post('/api/v1/image/extract-watermark', formData)
+    const payload = response?.data || {}
+    const watermarkBits = payload.watermark_bits || payload.extracted_watermark || ''
+
+    if (!/^[01]{32}$/.test(watermarkBits)) {
+      throw new Error('算法服务返回了非法的水印数据')
     }
-  }, 2000)
+
+    isExtracting.value = false
+
+    result.value = {
+      status: 'success',
+      watermark: watermarkBits,
+      timeTaken: ((payload.elapsed_ms || 0) / 1000).toFixed(2),
+      timestamp: payload.extracted_at
+        ? new Date(payload.extracted_at).toLocaleString('zh-CN', { hour12: false })
+        : new Date().toLocaleString('zh-CN', { hour12: false }),
+    }
+    ElMessage.success('水印提取成功！')
+  } catch (err) {
+    isExtracting.value = false
+
+    result.value = {
+      status: 'error',
+      message: err?.response?.data?.detail || err?.message || '未检测到有效的水印信息，或图像已被严重破坏。'
+    }
+    ElMessage.error(result.value.message)
+  }
 }
 </script>
 

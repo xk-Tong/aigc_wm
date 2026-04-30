@@ -35,3 +35,20 @@ class GenerateWatermarkedImageResponse(BaseModel):
     model: str
     width: int
     height: int
+
+
+class ExtractWatermarkResponse(BaseModel):
+    """业务后端返回给前端的图像水印提取结果。"""
+
+    # 上传文件在本次请求中的唯一标识。
+    file_id: str
+    # 原始文件名，方便用户确认当前处理的是哪张图。
+    file_name: str
+    # 提取出的 32 位二进制水印。
+    watermark_bits: str
+    # 处理耗时（毫秒）。
+    elapsed_ms: int
+    # 提取时间（UTC 字符串）。
+    extracted_at: str
+    # 保存后的文件大小，便于排查与记录。
+    file_size_bytes: int

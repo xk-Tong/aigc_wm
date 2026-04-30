@@ -2,7 +2,7 @@ import base64
 from pathlib import Path
 from time import perf_counter
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 # 该服务用于本地联调：模拟算法后端，不做真实模型推理。
@@ -71,5 +71,39 @@ async def generate(request: GenerateRequest):
             "model": request.model,
             "watermark_bits": request.watermark_bits,
             "guidance_scale": request.guidance_scale,
+        },
+    }
+
+
+@app.post("/algo/v1/watermark/extract")
+async def extract_watermark(image_file: UploadFile = File(...)):
+    """模拟提取图像中的 32 位水印。
+
+    这个接口会读取上传文件，然后返回一个固定的 32 位二进制字符串，
+    方便业务后端和前端联调，不依赖真实算法实现。
+    """
+
+    started = perf_counter()
+
+    if not image_file.filename:
+        raise HTTPException(status_code=400, detail="缺少文件名")
+
+    image_bytes = await image_file.read()
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="上传文件为空")
+
+    if image_file.content_type not in {"image/png", "image/jpeg", "image/webp"}:
+        raise HTTPException(status_code=400, detail="只支持 JPG、PNG、WEBP 图像")
+
+    watermark_bits = "01010101010101010101010101010101"
+    elapsed_ms = int((perf_counter() - started) * 1000)
+
+    return {
+        "extracted_watermark": watermark_bits,
+        "elapsed_ms": elapsed_ms,
+        "echo": {
+            "filename": image_file.filename,
+            "content_type": image_file.content_type,
+            "size_bytes": len(image_bytes),
         },
     }

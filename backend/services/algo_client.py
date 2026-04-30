@@ -81,6 +81,74 @@ class AlgoClient:
 
         return data
 
+    async def extract_watermark_from_image(
+        self,
+        file_name: str,
+        file_bytes: bytes,
+        content_type: str | None = None,
+    ) -> dict[str, Any]:
+        """调用算法服务的提取接口。
+
+        参数:
+            file_name: 上传文件名，用于传给算法服务做日志和排查。
+            file_bytes: 图片二进制内容。
+            content_type: 图片 MIME 类型，例如 image/png。
+
+        返回:
+            算法服务返回的 JSON 字典，至少包含 extracted_watermark。
+        """
+
+        headers = {}
+        if ALGO_IMAGE_API_KEY:
+            headers["X-API-Key"] = ALGO_IMAGE_API_KEY
+
+        files = {
+            "image_file": (
+                file_name,
+                file_bytes,
+                content_type or "application/octet-stream",
+            )
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=ALGO_IMAGE_TIMEOUT_SECONDS) as client:
+                response = await client.post(
+                    f"{ALGO_IMAGE_BASE_URL}/algo/v1/watermark/extract",
+                    files=files,
+                    headers=headers,
+                )
+        except httpx.TimeoutException as exc:
+            raise AlgoServiceError("算法服务响应超时", status_code=503) from exc
+        except httpx.RequestError as exc:
+            raise AlgoServiceError("算法服务不可达", status_code=503) from exc
+
+        if response.status_code >= 500:
+            raise AlgoServiceError("算法服务执行失败", status_code=502)
+
+        if response.status_code >= 400:
+            detail = "算法服务参数错误"
+            try:
+                payload_data = response.json()
+                detail = payload_data.get("detail") or payload_data.get("message") or detail
+            except Exception:
+                pass
+            raise AlgoServiceError(detail, status_code=422)
+
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise AlgoServiceError("算法服务返回了非 JSON 数据", status_code=502) from exc
+
+        if not isinstance(data, dict):
+            raise AlgoServiceError("算法服务返回了非法数据格式", status_code=502)
+
+        extracted_watermark = data.get("extracted_watermark") or data.get("watermark_bits")
+        if not extracted_watermark:
+            raise AlgoServiceError("算法服务响应缺少 extracted_watermark 字段", status_code=502)
+
+        data["extracted_watermark"] = extracted_watermark
+        return data
+
 
 # 提供模块级单例，方便路由直接复用。
 algo_client = AlgoClient()
