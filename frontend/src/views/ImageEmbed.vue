@@ -90,7 +90,7 @@
               </el-form-item>
             </div>
 
-            <el-form-item label="引导尺度 guidance_scale (0-20)" prop="guidance_scale">
+            <el-form-item label="引导尺度 guidance_scale (0-10)" prop="guidance_scale">
               <el-input-number
                 v-model="formData.guidance_scale"
                 :min="0"
@@ -101,7 +101,7 @@
                 size="large"
                 class="w-full param-input-number"
               />
-              <div class="text-xs text-gray-400 mt-1">建议范围 0.0 - 20.0，默认值 1.0</div>
+              <div class="text-xs text-gray-400 mt-1">建议范围 0.0 - 10.0，默认值 1.0</div>
             </el-form-item>
 
             <!-- 5. 生成按钮 -->

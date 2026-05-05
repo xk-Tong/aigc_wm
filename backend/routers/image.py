@@ -129,8 +129,9 @@ async def generate_watermarked_image(
     relative_path = file_path.relative_to(Path(BIZ_IMAGE_STORAGE_ROOT)).as_posix()
     image_url = str(request.url_for("storage", path=relative_path))
 
-    # 如果算法侧没有给耗时，这里用本地统计值兜底。
-    elapsed_ms = int(algo_response.get("elapsed_ms") or ((perf_counter() - started) * 1000))
+    local_elapsed_ms = int((perf_counter() - started) * 1000)
+    algo_elapsed_ms = int(algo_response.get("elapsed_ms") or 0)
+    elapsed_ms = max(local_elapsed_ms, algo_elapsed_ms)
 
     # Step 6: 直出业务数据返回给前端。
     return {

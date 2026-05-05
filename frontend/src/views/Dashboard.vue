@@ -21,7 +21,7 @@
             </div>
             <div class="flex justify-between items-end">
               <span class="text-sm text-gray-500 font-medium">待处理任务</span>
-              <span class="text-2xl font-bold text-blue-600">12 <span class="text-xs font-normal text-gray-400 ml-1">项</span></span>
+              <span class="text-2xl font-bold text-blue-600">0 <span class="text-xs font-normal text-gray-400 ml-1">项</span></span>
             </div>
           </div>
         </div>
@@ -54,7 +54,7 @@
         <div class="flex-1 flex flex-col justify-center py-4">
           <h2 class="text-2xl font-bold text-gray-800 mb-3">更新日志</h2>
           <p class="text-gray-500 leading-relaxed text-sm max-w-2xl">
-            完成前端基本设计和用户注册登录功能。
+            
           </p>
         </div>
         

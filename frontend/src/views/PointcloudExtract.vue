@@ -184,9 +184,9 @@
 <script setup>
 import { ref, computed, onBeforeUnmount, shallowRef, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
+import request from '../utils/request'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-//引入点云加载器
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js'
 import { PCDLoader } from 'three/examples/jsm/loaders/PCDLoader.js'
 // --- 状态数据 ---
@@ -243,8 +243,7 @@ const handleFileChange = (uploadFile) => {
   fileInfo.value = {
     name: file.name,
     size: sizeMB > 1 ? `${sizeMB} MB` : `${(file.size / 1024).toFixed(2)} KB`,
-    // pointsCount: (Math.floor(Math.random() * 500000) + 50000).toLocaleString() // 模拟点数
-    pointsCount: '计算中...'
+    pointsCount: (Math.floor(Math.random() * 500000) + 50000).toLocaleString() // 模拟点数
   }
   
   result.value = null
@@ -273,38 +272,44 @@ const copyWatermark = async () => {
   }
 }
 
-const startExtraction = () => {
+const startExtraction = async () => {
   if (!uploadedFile.value) return
 
   isExtracting.value = true
   result.value = null
 
-  // 模拟网络请求延迟 (3-6秒)
-  const delay = Math.random() * 3000 + 3000
-  setTimeout(() => {
-    isExtracting.value = false
-    
-    // 模拟 85% 概率成功
-    const isSuccess = Math.random() > 0.15
+  try {
+    const formData = new FormData()
+    formData.append('pointcloud_file', uploadedFile.value)
 
-    if (isSuccess) {
-      let binaryStr = ''
-      for (let i = 0; i < 32; i++) binaryStr += Math.random() > 0.5 ? '1' : '0'
-      
-      result.value = {
-        status: 'success',
-        watermark: binaryStr,
-        timeTaken: (delay / 1000).toFixed(1)
-      }
-      ElMessage.success('水印提取成功！')
-    } else {
-      result.value = {
-        status: 'error',
-        message: '点云结构可能已被破坏或未包含有效的水印特征，提取失败。'
-      }
-      ElMessage.error('提取失败')
+    const response = await request.post('/api/v1/pointcloud/extract-watermark', formData)
+    const payload = response?.data || {}
+    const watermarkBits = payload.watermark_bits || payload.extracted_watermark || ''
+
+    if (!/^[01]{32}$/.test(watermarkBits)) {
+      throw new Error('算法服务返回了非法的水印数据')
     }
-  }, delay)
+
+    isExtracting.value = false
+
+    result.value = {
+      status: 'success',
+      watermark: watermarkBits,
+      timeTaken: ((payload.elapsed_ms || 0) / 1000).toFixed(2),
+      timestamp: payload.extracted_at
+        ? new Date(payload.extracted_at).toLocaleString('zh-CN', { hour12: false })
+        : new Date().toLocaleString('zh-CN', { hour12: false }),
+    }
+    ElMessage.success('水印提取成功！')
+  } catch (err) {
+    isExtracting.value = false
+
+    result.value = {
+      status: 'error',
+      message: err?.response?.data?.detail || err?.message || '点云结构可能已被破坏或未包含有效的水印特征，提取失败。'
+    }
+    ElMessage.error(result.value.message)
+  }
 }
 
 // --- Three.js 核心逻辑 ---
@@ -451,7 +456,6 @@ const loadUserPointCloud = (file) => {
 
   if (ext === 'ply') {
     new PLYLoader().load(url, (geometry) => {
-      fileInfo.value.pointsCount = geometry.attributes.position.count.toLocaleString()
       processAndAddGeometry(geometry)
       URL.revokeObjectURL(url) // 释放内存
     }, undefined, () => {
@@ -462,9 +466,6 @@ const loadUserPointCloud = (file) => {
     })
   } else if (ext === 'pcd') {
     new PCDLoader().load(url, (points) => {
-      fileInfo.value.pointsCount = points.geometry.attributes.position.count.toLocaleString()
-      
-      pointsObject.value = points
       if (loadToken !== activeLoadToken || !scene.value) {
         disposeObject3D(points)
         return

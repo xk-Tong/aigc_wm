@@ -23,3 +23,17 @@ BIZ_IMAGE_STORAGE_ROOT = os.getenv(
     "BIZ_IMAGE_STORAGE_ROOT",
     str((BACKEND_ROOT / "storage").resolve()),
 )
+
+ALGO_POINTCLOUD_BASE_URL = os.getenv("ALGO_POINTCLOUD_BASE_URL", "http://127.0.0.1:9002").rstrip("/")
+ALGO_POINTCLOUD_TIMEOUT_SECONDS = float(os.getenv("ALGO_POINTCLOUD_TIMEOUT_SECONDS", "180"))
+ALGO_POINTCLOUD_API_KEY = os.getenv("ALGO_POINTCLOUD_API_KEY", "")
+POINTCLOUD_REQUIRE_AUTH = os.getenv("POINTCLOUD_REQUIRE_AUTH", "true").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+
+BIZ_POINTCLOUD_STORAGE_ROOT = os.getenv(
+    "BIZ_POINTCLOUD_STORAGE_ROOT",
+    str((BACKEND_ROOT / "storage_pointcloud").resolve()),
+)
