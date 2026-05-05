@@ -46,7 +46,7 @@ async def generate(request: GenerateRequest):
         request: 业务后端转发过来的生成参数。
 
     返回:
-        与真实算法服务相同结构的 JSON，包含 result_image_base64。
+        与真实算法服务相同结构的 JSON，包含 original_image_base64 和 watermarked_image_base64。
     """
 
     # 记录耗时，便于业务后端展示“生成时间”。
@@ -59,9 +59,10 @@ async def generate(request: GenerateRequest):
 
     elapsed_ms = int((perf_counter() - started) * 1000)
 
-    # echo 字段用于联调时确认参数是否按预期传到了算法侧。
+    # 返回原图和水印图（模拟场景下两张图相同，真实场景由算法模型区分）。
     return {
-        "result_image_base64": image_base64,
+        "original_image_base64": image_base64,
+        "watermarked_image_base64": image_base64,
         "image_format": "png",
         "width": request.width,
         "height": request.height,

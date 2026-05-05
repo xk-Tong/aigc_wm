@@ -100,19 +100,22 @@ async def generate_watermarked_image(
     except AlgoServiceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
 
-    # Step 3: 解析算法服务返回的图片数据。
-    image_base64 = algo_response.get("result_image_base64", "")
+    # Step 3: 解析算法服务返回的两张图片（原图 + 水印图）。
+    orig_base64 = algo_response.get("original_image_base64", "")
+    wm_base64 = algo_response.get("watermarked_image_base64", "")
     image_format = (algo_response.get("image_format") or "png").lower()
     if image_format not in {"png", "jpg", "jpeg", "webp"}:
         image_format = "png"
 
-    image_bytes: bytes
+    orig_bytes: bytes
+    wm_bytes: bytes
     try:
-        image_bytes = base64.b64decode(image_base64, validate=True)
+        orig_bytes = base64.b64decode(orig_base64, validate=True)
+        wm_bytes = base64.b64decode(wm_base64, validate=True)
     except binascii.Error as exc:
         raise HTTPException(status_code=502, detail="算法服务返回了非法图像数据") from exc
 
-    # Step 4: 生成按日期分层的目录，把图片写入业务后端磁盘。
+    # Step 4: 生成按日期分层的目录，把两张图片写入业务后端磁盘。
     generated_at = datetime.now(timezone.utc)
     date_path = generated_at.strftime("%Y/%m/%d")
     image_id = uuid4().hex
@@ -120,14 +123,15 @@ async def generate_watermarked_image(
     save_dir = Path(BIZ_IMAGE_STORAGE_ROOT) / "generated" / date_path / image_id
     save_dir.mkdir(parents=True, exist_ok=True)
 
-    file_name = f"orig.{image_format}"
-    file_path = save_dir / file_name
-    with file_path.open("wb") as f:
-        f.write(image_bytes)
+    orig_path = save_dir / f"orig.{image_format}"
+    wm_path = save_dir / f"wm.{image_format}"
+    orig_path.write_bytes(orig_bytes)
+    wm_path.write_bytes(wm_bytes)
 
     # Step 5: 把磁盘相对路径转换为前端可直接访问的 URL。
-    relative_path = file_path.relative_to(Path(BIZ_IMAGE_STORAGE_ROOT)).as_posix()
-    image_url = str(request.url_for("storage", path=relative_path))
+    storage_root = Path(BIZ_IMAGE_STORAGE_ROOT)
+    orig_url = str(request.url_for("storage", path=orig_path.relative_to(storage_root).as_posix()))
+    wm_url = str(request.url_for("storage", path=wm_path.relative_to(storage_root).as_posix()))
 
     local_elapsed_ms = int((perf_counter() - started) * 1000)
     algo_elapsed_ms = int(algo_response.get("elapsed_ms") or 0)
@@ -136,8 +140,9 @@ async def generate_watermarked_image(
     # Step 6: 直出业务数据返回给前端。
     return {
         "image_id": image_id,
-        "image_url": image_url,
-        "download_url": image_url,
+        "original_image_url": orig_url,
+        "watermarked_image_url": wm_url,
+        "download_url": wm_url,
         "watermark_bits": body.watermark_bits,
         "elapsed_ms": elapsed_ms,
         "generated_at": generated_at.strftime("%Y-%m-%dT%H:%M:%SZ"),

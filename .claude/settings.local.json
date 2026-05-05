@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(D:/miniconda3/envs/dev/python.exe -m unittest backend.tests.test_image_flow.TestImageRouter.test_generate_watermarked_image_success -v)"
+    ]
+  }
+}

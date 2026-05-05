@@ -20,17 +20,15 @@ class GenerateWatermarkedImageRequest(BaseModel):
 class GenerateWatermarkedImageResponse(BaseModel):
     """业务后端返回给前端的图像生成结果。"""
 
-    # 图片唯一 ID，可用于后续追踪或扩展任务系统。
     image_id: str
-    # 前端展示用 URL。
-    image_url: str
-    # 前端下载用 URL（当前与 image_url 一致，后续可分离）。
+    # 原始生成图（无水印）URL。
+    original_image_url: str
+    # 加水印后的图像 URL。
+    watermarked_image_url: str
+    # 前端下载用 URL（指向水印图）。
     download_url: str
-    # 回显实际嵌入的水印内容。
     watermark_bits: str
-    # 处理耗时（毫秒）。
     elapsed_ms: int
-    # 生成时间（UTC 字符串）。
     generated_at: str
     model: str
     width: int

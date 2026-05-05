@@ -7,11 +7,11 @@
       <h2 class="text-2xl font-bold text-gray-800 tracking-tight">生成含水印图像</h2>
     </div>
 
-    <!-- 左右两栏布局 (左 5/12 约 40%，右 7/12 约 60%) -->
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-      
+    <!-- 左右两栏布局 (左 4/12 约 33%，右 8/12 约 67%) -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
       <!-- ================= 左侧栏：参数配置区域 ================= -->
-      <div class="lg:col-span-5 space-y-6">
+      <div class="lg:col-span-4 space-y-6">
         <!-- 配置卡片 -->
         <div class="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
           <h3 class="text-lg font-bold text-gray-800 mb-5">生成参数配置</h3>
@@ -138,10 +138,10 @@
       </div>
 
       <!-- ================= 右侧栏：结果预览区域 ================= -->
-      <div class="lg:col-span-7 space-y-6">
-        
+      <div class="lg:col-span-8 space-y-4">
+
         <!-- 图像预览卡片 -->
-        <div class="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex flex-col h-[500px]">
+        <div class="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex flex-col h-[680px]">
           <div class="flex justify-between items-center mb-4 shrink-0">
             <h3 class="text-lg font-bold text-gray-800">预览区域</h3>
             <!-- 工具栏 -->
@@ -159,60 +159,103 @@
               <el-icon class="text-5xl mb-2 opacity-50"><PictureFilled /></el-icon>
               <p>等待生成</p>
             </div>
-            
+
             <!-- 加载状态 -->
             <div v-else-if="isGenerating" class="text-center text-blue-500">
               <el-icon class="text-5xl mb-2 is-loading"><Loading /></el-icon>
               <p class="text-sm font-medium animate-pulse">AI 正在努力作画中...</p>
             </div>
 
-            <!-- 有图状态 -->
-            <div v-else class="w-full h-full overflow-auto flex items-center justify-center custom-scrollbar">
-              <img 
-                :src="result.imageUrl" 
-                alt="Generated Image" 
-                class="transition-transform duration-200 origin-center"
-                :style="{ transform: `scale(${zoomLevel})`, objectFit: 'contain', maxHeight: '100%', maxWidth: '100%' }"
-              />
-            </div>
+            <!-- 有图状态：对比展示 -->
+            <template v-else>
+              <!-- 模式切换按钮 -->
+              <div class="absolute top-3 left-3 z-20 flex gap-0.5 bg-white/80 backdrop-blur rounded-lg p-0.5 shadow-sm border border-gray-200">
+                <button
+                  class="px-3 py-1.5 text-xs font-medium rounded-md transition-colors"
+                  :class="compareMode === 'side' ? 'bg-blue-500 text-white shadow' : 'text-gray-600 hover:text-gray-800'"
+                  @click="compareMode = 'side'"
+                >并排</button>
+                <button
+                  class="px-3 py-1.5 text-xs font-medium rounded-md transition-colors"
+                  :class="compareMode === 'slider' ? 'bg-blue-500 text-white shadow' : 'text-gray-600 hover:text-gray-800'"
+                  @click="compareMode = 'slider'"
+                >叠加</button>
+              </div>
+
+              <!-- 并排模式 -->
+              <div v-if="compareMode === 'side'" class="w-full h-full flex gap-4 p-6" :style="{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }">
+                <div class="flex-1 flex flex-col items-center min-w-0">
+                  <span class="text-xs text-gray-500 mb-2 shrink-0 font-medium">原图 (无水印)</span>
+                  <div class="flex-1 w-full flex items-center justify-center min-h-0">
+                    <img :src="result.originalUrl" alt="原始图像" class="max-w-full max-h-full object-contain rounded-lg shadow-sm" />
+                  </div>
+                </div>
+                <div class="flex-1 flex flex-col items-center min-w-0">
+                  <span class="text-xs text-gray-500 mb-2 shrink-0 font-medium">水印图</span>
+                  <div class="flex-1 w-full flex items-center justify-center min-h-0">
+                    <img :src="result.watermarkedUrl" alt="水印图像" class="max-w-full max-h-full object-contain rounded-lg shadow-sm" />
+                  </div>
+                </div>
+              </div>
+
+              <!-- 叠加拖动对比模式 -->
+              <div v-else class="w-full h-full flex items-center justify-center p-6">
+                <div class="relative w-full h-full select-none" :style="{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }">
+                  <!-- 底层：水印图（全图可见） -->
+                  <img :src="result.watermarkedUrl" alt="水印图像" class="absolute inset-0 w-full h-full object-contain rounded-lg" />
+                  <!-- 顶层：原图（裁剪显示左侧部分） -->
+                  <img :src="result.originalUrl" alt="原始图像" class="absolute inset-0 w-full h-full object-contain rounded-lg"
+                       :style="{ clipPath: `inset(0 ${100 - sliderPos}% 0 0)` }" />
+                  <!-- 分界线 -->
+                  <div class="absolute top-0 bottom-0 w-0.5 bg-white shadow-md pointer-events-none" :style="{ left: `${sliderPos}%` }"></div>
+                  <!-- 滑块手柄 -->
+                  <div class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-9 h-9 bg-white rounded-full shadow-lg flex items-center justify-center pointer-events-none border border-gray-200"
+                       :style="{ left: `${sliderPos}%` }">
+                    <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7l-5 5 5 5M16 7l5 5-5 5" /></svg>
+                  </div>
+                  <!-- 拖动条 -->
+                  <input type="range" min="0" max="100" v-model.number="sliderPos" class="absolute inset-0 w-full h-full opacity-0 cursor-ew-resize z-10" />
+                </div>
+              </div>
+            </template>
           </div>
         </div>
 
         <!-- 生成完成后的信息与操作 -->
         <transition name="el-fade-in-linear">
-          <div v-if="result" class="space-y-6">
-            
-            <!-- 操作按钮组 & 生成耗时 -->
-            <div class="flex items-center justify-between bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-              <span class="text-sm text-gray-500 font-medium ml-2">
+          <div v-if="result" class="space-y-3">
+
+            <!-- 操作按钮组 & 生成耗时（紧凑单行） -->
+            <div class="flex items-center justify-between bg-white rounded-2xl px-5 py-3 shadow-sm border border-gray-100">
+              <span class="text-sm text-gray-500 font-medium">
                 <el-icon class="mr-1 align-middle"><Timer /></el-icon>
                 生成耗时: <span class="text-gray-800 font-bold">{{ result.timeTaken }}s</span>
               </span>
               <div class="flex gap-3">
-                <el-button plain round @click="handleGenerate">重新生成</el-button>
-                <el-button type="primary" round class="shadow-md shadow-blue-500/20" @click="handleDownload">
+                <el-button plain round size="small" @click="handleGenerate">重新生成</el-button>
+                <el-button type="primary" round size="small" class="shadow-md shadow-blue-500/20" @click="handleDownload">
                   <el-icon class="mr-1"><Download /></el-icon> 下载图像
                 </el-button>
               </div>
             </div>
 
-            <!-- 水印信息卡片 -->
-            <div class="bg-blue-50/50 rounded-3xl p-6 border border-blue-100 relative overflow-hidden">
+            <!-- 水印信息卡片（精简内边距） -->
+            <div class="bg-blue-50/50 rounded-2xl px-5 py-4 border border-blue-100 relative overflow-hidden">
               <div class="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl -mr-10 -mt-10"></div>
-              
-              <h4 class="text-sm font-bold text-blue-800 mb-4 flex items-center">
+
+              <h4 class="text-sm font-bold text-blue-800 mb-3 flex items-center">
                 <el-icon class="mr-2 text-lg"><Key /></el-icon> 已嵌入水印信息
               </h4>
-              
-              <div class="bg-white rounded-xl p-4 border border-blue-100/50 flex justify-between items-center shadow-sm mb-4">
-                <span class="font-mono text-lg text-gray-800 tracking-widest font-bold">
+
+              <div class="bg-white rounded-xl px-4 py-3 border border-blue-100/50 flex justify-between items-center shadow-sm mb-3">
+                <span class="font-mono text-base text-gray-800 tracking-widest font-bold">
                   {{ formattedWatermark }}
                 </span>
                 <el-button circle size="small" @click="copyWatermark" title="复制水印">
                   <el-icon><CopyDocument /></el-icon>
                 </el-button>
               </div>
-              
+
               <div class="text-xs text-gray-500 flex items-center">
                 <el-icon class="mr-1"><Calendar /></el-icon>
                 嵌入时间: {{ result.timestamp }}
@@ -297,10 +340,12 @@ const formRules = {
   ],
 }
 
-// 页面运行状态：是否在生成、当前结果、图片缩放倍数。
+// 页面运行状态：是否在生成、当前结果、图片缩放倍数、对比模式、叠加滑块位置。
 const isGenerating = ref(false)
 const result = ref(null)
 const zoomLevel = ref(1)
+const compareMode = ref('side')  // 'side' | 'slider'
+const sliderPos = ref(50)        // 叠加模式下滑块位置百分比
 
 // 随机生成 32 位二进制水印
 const generateRandomWatermark = () => {
@@ -372,12 +417,15 @@ const handleGenerate = async () => {
     // 把后端返回数据转换成页面需要的展示结构。
     const generatedAt = payload.generated_at ? new Date(payload.generated_at) : new Date()
     result.value = {
-      imageUrl: payload.image_url,
-      downloadUrl: payload.download_url || payload.image_url,
+      originalUrl: payload.original_image_url,
+      watermarkedUrl: payload.watermarked_image_url,
+      downloadUrl: payload.download_url || payload.watermarked_image_url,
       watermark: payload.watermark_bits || formData.value.watermark,
       timeTaken: ((payload.elapsed_ms || 0) / 1000).toFixed(1),
-      timestamp: generatedAt.toLocaleString('zh-CN', { hour12: false })
+      timestamp: generatedAt.toLocaleString('zh-CN', { hour12: false }),
     }
+    compareMode.value = 'side'
+    sliderPos.value = 50
 
     ElMessage.success('图像生成并嵌入水印成功！')
   } catch (err) {

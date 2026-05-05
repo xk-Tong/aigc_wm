@@ -78,9 +78,9 @@ class AlgoClient:
         except ValueError as exc:
             raise AlgoServiceError("算法服务返回了非 JSON 数据", status_code=502) from exc
 
-        # 主链路依赖 result_image_base64 字段，这里做强校验。
-        if not isinstance(data, dict) or not data.get("result_image_base64"):
-            raise AlgoServiceError("算法服务响应缺少 result_image_base64 字段", status_code=502)
+        # 主链路依赖 original_image_base64 和 watermarked_image_base64 两个字段。
+        if not isinstance(data, dict) or not data.get("original_image_base64") or not data.get("watermarked_image_base64"):
+            raise AlgoServiceError("算法服务响应缺少 original_image_base64 或 watermarked_image_base64 字段", status_code=502)
 
         return data
 

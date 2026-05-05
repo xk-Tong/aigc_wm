@@ -40,7 +40,8 @@ class TestImageRouter(unittest.IsolatedAsyncioTestCase):
             "routers.image.algo_client.generate_watermarked_image",
             new=AsyncMock(
                 return_value={
-                    "result_image_base64": encoded,
+                    "original_image_base64": encoded,
+                    "watermarked_image_base64": encoded,
                     "image_format": "png",
                     "width": 2048,
                     "height": 2048,
@@ -54,7 +55,8 @@ class TestImageRouter(unittest.IsolatedAsyncioTestCase):
                 authorization="Bearer token-123",
             )
 
-        self.assertIn("image_url", response)
+        self.assertIn("original_image_url", response)
+        self.assertIn("watermarked_image_url", response)
         self.assertIn("download_url", response)
         self.assertEqual(response["watermark_bits"], body.watermark_bits)
         self.assertEqual(response["elapsed_ms"], 1200)
