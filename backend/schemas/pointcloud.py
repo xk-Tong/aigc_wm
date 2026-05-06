@@ -6,7 +6,8 @@ class GenerateWatermarkedPointcloudRequest(BaseModel):
 
     prompt: str = Field(..., min_length=1, max_length=2000)
     model: str = Field(default="trellis")
-    watermark_bits: str = Field(..., pattern=r"^[01]{32}$")
+    watermark_bits: str = Field(..., pattern=r"^[0-9A-Fa-f]{8}$")
+    seed: int | None = Field(default=None, ge=0)
     point_count: int = Field(default=50000, ge=1000, le=1000000)
 
 

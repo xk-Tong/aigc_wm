@@ -138,7 +138,7 @@
                 {{ formattedWatermark }}
               </p>
               <p class="text-xs text-gray-400 font-mono break-all">
-                原始二进制: {{ result.watermark }}
+                水印值: {{ result.watermark }}
               </p>
             </div>
 
@@ -221,7 +221,7 @@ const resultCardClass = computed(() => {
 
 const formattedWatermark = computed(() => {
   if (!result.value || !result.value.watermark) return ''
-  return result.value.watermark.replace(/(.{8})/g, '$1 ').trim()
+  return result.value.watermark
 })
 
 // --- 业务逻辑 ---
@@ -286,7 +286,7 @@ const startExtraction = async () => {
     const payload = response?.data || {}
     const watermarkBits = payload.watermark_bits || payload.extracted_watermark || ''
 
-    if (!/^[01]{32}$/.test(watermarkBits)) {
+    if (!/^[0-9A-Fa-f]{8}$/.test(watermarkBits)) {
       throw new Error('算法服务返回了非法的水印数据')
     }
 

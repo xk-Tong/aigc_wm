@@ -24,7 +24,8 @@ uvicorn main:app --host 0.0.0.0 --port 9002 --reload
 {
   "prompt": "一只飞翔的鸟",
   "model": "trellis",
-  "watermark_bits": "01010101010101010101010101010101",
+  "watermark_bits": "A1B2C3",
+  "seed": 42,
   "point_count": 50000
 }
 ```
@@ -41,7 +42,7 @@ uvicorn main:app --host 0.0.0.0 --port 9002 --reload
 响应（JSON）：
 ```json
 {
-  "extracted_watermark": "01010101010101010101010101010101",
+  "extracted_watermark": "A1B2C3",
   "elapsed_ms": 123,
   "echo": {
     "filename": "test.ply",

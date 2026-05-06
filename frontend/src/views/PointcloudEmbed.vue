@@ -47,13 +47,13 @@
             </el-form-item>
 
             <!-- 3. 水印信息输入 -->
-            <el-form-item label="水印信息 (32位二进制)" prop="watermark">
+            <el-form-item label="水印信息 (8位十六进制)" prop="watermark">
               <div class="flex gap-2 w-full">
                 <el-input
                   v-model="formData.watermark"
-                  placeholder="请输入32位二进制水印，如 10101010..."
+                  placeholder="请输入8位十六进制水印，如 A1B2C3D4..."
                   size="large"
-                  maxlength="32"
+                  maxlength="8"
                   class="flex-1 font-mono"
                 />
                 <el-button size="large" @click="generateRandomWatermark" class="shrink-0">
@@ -62,7 +62,22 @@
               </div>
             </el-form-item>
 
-            <!-- 4. 目标点数 -->
+            <!-- 4. 随机种子 -->
+            <el-form-item label="随机种子 (Seed)">
+              <el-input-number
+                v-model="formData.seed"
+                :min="0"
+                :step="1"
+                :precision="0"
+                controls-position="right"
+                size="large"
+                placeholder="可选，留空则使用随机种子"
+                class="w-full param-input-number"
+              />
+              <div class="text-xs text-gray-400 mt-1">可选参数，设置后相同种子+相同水印可生成一致的点云</div>
+            </el-form-item>
+
+            <!-- 5. 目标点数 -->
             <el-form-item label="目标点数" prop="pointCount">
               <el-input-number
                 v-model="formData.pointCount"
@@ -77,7 +92,7 @@
               <div class="text-xs text-gray-400 mt-1">建议范围 10000 - 500000，默认值 50000</div>
             </el-form-item>
 
-            <!-- 5. 生成按钮 -->
+            <!-- 6. 生成按钮 -->
             <div class="pt-4">
               <el-button 
                 type="primary" 
@@ -192,6 +207,7 @@ const formData = ref({
   prompt: '',
   model: 'trellis',
   watermark: '',
+  seed: null,
   pointCount: 50000,
 })
 
@@ -219,8 +235,8 @@ const formRules = {
     { min: 1, max: 2000, message: '描述长度需在 1-2000 字符之间', trigger: 'blur' },
   ],
   watermark: [
-    { required: true, message: '请输入 32 位二进制水印', trigger: 'blur' },
-    { pattern: /^[01]{32}$/, message: '请输入有效的 32 位二进制水印', trigger: 'blur' },
+    { required: true, message: '请输入 8 位十六进制水印', trigger: 'blur' },
+    { pattern: /^[0-9A-Fa-f]{8}$/, message: '请输入有效的 8 位十六进制水印', trigger: 'blur' },
   ],
   pointCount: [
     { validator: validateIntegerRange('目标点数', 1000, 1000000), trigger: ['blur', 'change'] },
@@ -241,14 +257,15 @@ const axesHelper = shallowRef(null)
 let animationFrameId = null
 
 const generateRandomWatermark = () => {
-  let binaryStr = ''
-  for (let i = 0; i < 32; i++) binaryStr += Math.random() > 0.5 ? '1' : '0'
-  formData.value.watermark = binaryStr
+  const hexChars = '0123456789ABCDEF'
+  let hexStr = ''
+  for (let i = 0; i < 8; i++) hexStr += hexChars[Math.floor(Math.random() * 16)]
+  formData.value.watermark = hexStr
 }
 
 const formattedWatermark = computed(() => {
   if (!result.value || !result.value.watermark) return ''
-  return result.value.watermark.replace(/(.{8})/g, '$1 ').trim()
+  return result.value.watermark
 })
 
 const copyWatermark = async () => {
@@ -419,6 +436,7 @@ const handleGenerate = async () => {
       prompt: formData.value.prompt,
       model: formData.value.model,
       watermark_bits: formData.value.watermark,
+      seed: formData.value.seed,
       point_count: formData.value.pointCount,
     })
 

@@ -117,7 +117,7 @@ async def extract_watermark(
     pointcloud_file: UploadFile = File(...),
     authorization: Optional[str] = Header(default=None),
 ):
-    """接收用户上传的点云文件，提取其中嵌入的 32 位水印。"""
+    """接收用户上传的点云文件，提取其中嵌入的 6 位十六进制水印。"""
 
     if POINTCLOUD_REQUIRE_AUTH:
         token = _extract_token(authorization)
@@ -164,7 +164,7 @@ async def extract_watermark(
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
     watermark_bits = str(algo_response.get("extracted_watermark") or "")
-    if not re.fullmatch(r"[01]{32}", watermark_bits):
+    if not re.fullmatch(r"[0-9A-Fa-f]{8}", watermark_bits):
         raise HTTPException(status_code=502, detail="算法服务返回了非法的水印数据")
 
     elapsed_ms = int(algo_response.get("elapsed_ms") or ((perf_counter() - started) * 1000))
