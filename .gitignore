@@ -3,7 +3,7 @@ __pycache__/
 *.py[cod]
 *.pyc
 backend/storage/
-
+backend/storage_pointcloud/
 # Frontend
 frontend/node_modules/
 
