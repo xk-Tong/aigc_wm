@@ -46,14 +46,9 @@
           <!-- 已上传文件预览 (上传后显示) -->
           <div v-else class="bg-gray-50 rounded-2xl p-4 border border-gray-200">
             <div class="flex flex-col items-center">
-              <!-- 缩略图占位 (使用 CSS 模拟 3D 效果) -->
-              <div class="w-full h-[160px] rounded-xl bg-gradient-to-br from-indigo-900 to-gray-900 mb-4 flex items-center justify-center relative overflow-hidden shadow-inner">
-                <div class="absolute inset-0 opacity-30" style="background-image: radial-gradient(circle, #fff 1px, transparent 1px); background-size: 10px 10px;"></div>
-                <el-icon class="text-5xl text-indigo-300/80 z-10"><Location /></el-icon>
-              </div>
               
               <!-- 文件信息 -->
-              <div class="w-full flex items-center justify-between bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+              <div class="w-full flex items-center justify-between bg-white p-3 rounded-xl border border-gray-100 shadow-sm mt-2">
                 <div class="flex items-center gap-3 overflow-hidden">
                   <div class="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-500 shrink-0">
                     <span class="text-xs font-bold">{{ fileExtension }}</span>
@@ -88,11 +83,7 @@
             </el-collapse>
           </div>
         </div>
-      </div>
 
-      <!-- ================= 右侧栏：提取结果与预览区域 ================= -->
-      <div class="lg:col-span-7 space-y-6">
-        
         <!-- 提取按钮 -->
         <el-button 
           type="primary" 
@@ -163,7 +154,10 @@
           <!-- 成功时的背景光晕装饰 -->
           <div v-if="result && result.status === 'success'" class="absolute -right-10 -bottom-10 w-40 h-40 bg-green-400/10 rounded-full blur-3xl pointer-events-none"></div>
         </div>
+      </div>
 
+      <!-- ================= 右侧栏：3D预览区域 ================= -->
+      <div class="lg:col-span-7 space-y-6">
         <!-- 3D 预览卡片 (仅上传后显示) -->
         <div v-show="uploadedFile" class="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex flex-col h-[400px]">
           <div class="flex justify-between items-center mb-4 shrink-0">
@@ -187,8 +181,10 @@ import { ElMessage } from 'element-plus'
 import request from '../utils/request'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js'
 import { PCDLoader } from 'three/examples/jsm/loaders/PCDLoader.js'
+import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 // --- 状态数据 ---
 const uploadedFile = ref(null)
 const fileInfo = ref({ name: '', size: '', pointsCount: '0' })
@@ -224,6 +220,15 @@ const formattedWatermark = computed(() => {
   return result.value.watermark
 })
 
+const updateUploadedPointCount = (pointCount) => {
+  if (typeof pointCount !== 'number' || Number.isNaN(pointCount)) return
+
+  fileInfo.value = {
+    ...fileInfo.value,
+    pointsCount: pointCount.toLocaleString(),
+  }
+}
+
 // --- 业务逻辑 ---
 
 const handleFileChange = (uploadFile) => {
@@ -243,7 +248,7 @@ const handleFileChange = (uploadFile) => {
   fileInfo.value = {
     name: file.name,
     size: sizeMB > 1 ? `${sizeMB} MB` : `${(file.size / 1024).toFixed(2)} KB`,
-    pointsCount: (Math.floor(Math.random() * 500000) + 50000).toLocaleString() // 模拟点数
+    pointsCount: '计算中...'
   }
   
   result.value = null
@@ -362,6 +367,27 @@ const onWindowResize = () => {
   renderer.value.setSize(width, height)
 }
 
+const buildPointCloudGeometryFromObject = (object) => {
+  const positions = []
+  const point = new THREE.Vector3()
+
+  object.updateMatrixWorld(true)
+  object.traverse((child) => {
+    const positionAttribute = child.geometry?.attributes?.position
+    if (!positionAttribute) return
+
+    for (let index = 0; index < positionAttribute.count; index += 1) {
+      point.fromBufferAttribute(positionAttribute, index)
+      point.applyMatrix4(child.matrixWorld)
+      positions.push(point.x, point.y, point.z)
+    }
+  })
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  return geometry
+}
+
 // 模拟生成一个点云模型 (环面/甜甜圈形状)
 const createMockPointCloud = () => {
   const particleCount = 50000
@@ -452,6 +478,8 @@ const loadUserPointCloud = (file) => {
     pointsObject.value.scale.setScalar(scale)
     pointsObject.value.rotation.x = Math.PI
     scene.value.add(pointsObject.value)
+
+    updateUploadedPointCount(geometry.attributes.position.count)
   }
 
   if (ext === 'ply') {
@@ -491,6 +519,9 @@ const loadUserPointCloud = (file) => {
         points.material.size = 0.03 / scale
       }
       scene.value.add(points)
+
+      updateUploadedPointCount(points.geometry?.attributes?.position?.count)
+
       URL.revokeObjectURL(url)
     }, undefined, () => {
       URL.revokeObjectURL(url)
@@ -498,7 +529,39 @@ const loadUserPointCloud = (file) => {
         ElMessage.error('PCD 文件加载失败，请检查文件是否损坏')
       }
     })
+  } else if (ext === 'stl') {
+    new STLLoader().load(url, (geometry) => {
+      processAndAddGeometry(geometry)
+      URL.revokeObjectURL(url)
+    }, undefined, () => {
+      URL.revokeObjectURL(url)
+      if (loadToken === activeLoadToken) {
+        ElMessage.error('STL 文件加载失败，请检查文件是否损坏')
+      }
+    })
+  } else if (ext === 'obj') {
+    new OBJLoader().load(url, (group) => {
+      if (loadToken !== activeLoadToken || !scene.value) {
+        disposeObject3D(group)
+        URL.revokeObjectURL(url)
+        return
+      }
+
+      const geometry = buildPointCloudGeometryFromObject(group)
+      disposeObject3D(group)
+      processAndAddGeometry(geometry)
+      URL.revokeObjectURL(url)
+    }, undefined, () => {
+      URL.revokeObjectURL(url)
+      if (loadToken === activeLoadToken) {
+        ElMessage.error('OBJ 文件加载失败，请检查文件是否损坏')
+      }
+    })
   } else {
+    fileInfo.value = {
+      ...fileInfo.value,
+      pointsCount: '无法计算',
+    }
     URL.revokeObjectURL(url)
     ElMessage.warning('当前预览仅支持 .ply 和 .pcd 格式，其他格式暂不渲染')
   }

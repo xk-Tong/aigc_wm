@@ -11,9 +11,8 @@ app = FastAPI(title="Mock Point Cloud Algo Service")
 class GeneratePointcloudRequest(BaseModel):
     prompt: str = Field(..., min_length=1, max_length=2000)
     model: str = Field(default="trellis")
-    watermark_bits: str = Field(..., pattern=r"^[0-9A-Fa-f]{6}$")
+    watermark_bits: str = Field(..., pattern=r"^[0-9A-Fa-f]{8}$")
     seed: int | None = Field(default=None, ge=0)
-    point_count: int = Field(default=50000, ge=1000, le=1000000)
 
 #模拟生成点云数据的函数，把这个函数替换成真实点云生成函数
 def _generate_mock_ply_bytes(point_count: int, seed: int | None = None) -> bytes:
@@ -71,7 +70,7 @@ async def generate(request: GeneratePointcloudRequest):
     """
     started = perf_counter()
 
-    point_count = min(request.point_count, 100000)
+    point_count = 50000
     ply_bytes = _generate_mock_ply_bytes(point_count, seed=request.seed)#把这个函数替换成真实点云生成函数
 
     elapsed_ms = int((perf_counter() - started) * 1000)
@@ -100,7 +99,7 @@ async def extract_watermark(pointcloud_file: UploadFile = File(...)):
     if not file_bytes:
         raise HTTPException(status_code=400, detail="上传文件为空")
 
-    watermark_bits = "A1B2C3"
+    watermark_bits = "A1B2C113"
     elapsed_ms = int((perf_counter() - started) * 1000)
 
     return {

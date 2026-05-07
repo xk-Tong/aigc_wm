@@ -67,7 +67,7 @@ async def generate_watermarked_pointcloud(
     payload = body.model_dump()
     started = perf_counter()
     try:
-        pointcloud_bytes, point_count, file_format, algo_elapsed_ms = (
+        pointcloud_bytes, file_format, algo_elapsed_ms = (
             await algo_client.generate_watermarked_pointcloud(payload)
         )
     except AlgoServiceError as exc:
@@ -94,8 +94,6 @@ async def generate_watermarked_pointcloud(
     local_elapsed_ms = int((perf_counter() - started) * 1000)
     elapsed_ms = max(local_elapsed_ms, algo_elapsed_ms)
 
-    actual_point_count = point_count if point_count > 0 else body.point_count
-
     return {
         "pointcloud_id": pointcloud_id,
         "pointcloud_url": pointcloud_url,
@@ -104,7 +102,6 @@ async def generate_watermarked_pointcloud(
         "elapsed_ms": elapsed_ms,
         "generated_at": generated_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "model": body.model,
-        "point_count": actual_point_count,
         "file_format": file_format,
     }
 

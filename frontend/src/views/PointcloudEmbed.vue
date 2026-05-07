@@ -32,7 +32,7 @@
                 :rows="4"
                 maxlength="2000"
                 show-word-limit
-                placeholder="请输入点云描述，如：一只飞翔的鸟、一辆复古跑车..."
+                placeholder="请输入点云描述"
                 class="custom-textarea"
               />
             </el-form-item>
@@ -74,25 +74,10 @@
                 placeholder="可选，留空则使用随机种子"
                 class="w-full param-input-number"
               />
-              <div class="text-xs text-gray-400 mt-1">可选参数，设置后相同种子+相同水印可生成一致的点云</div>
+              <div class="text-xs text-gray-400 mt-1">可选参数，设置后相同种子可生成一致的点云</div>
             </el-form-item>
 
-            <!-- 5. 目标点数 -->
-            <el-form-item label="目标点数" prop="pointCount">
-              <el-input-number
-                v-model="formData.pointCount"
-                :min="1000"
-                :max="1000000"
-                :step="10000"
-                :precision="0"
-                controls-position="right"
-                size="large"
-                class="w-full param-input-number"
-              />
-              <div class="text-xs text-gray-400 mt-1">建议范围 10000 - 500000，默认值 50000</div>
-            </el-form-item>
-
-            <!-- 6. 生成按钮 -->
+            <!-- 5. 生成按钮 -->
             <div class="pt-4">
               <el-button 
                 type="primary" 
@@ -208,7 +193,6 @@ const formData = ref({
   model: 'trellis',
   watermark: '',
   seed: null,
-  pointCount: 50000,
 })
 
 const generateFormRef = ref()
@@ -237,9 +221,6 @@ const formRules = {
   watermark: [
     { required: true, message: '请输入 8 位十六进制水印', trigger: 'blur' },
     { pattern: /^[0-9A-Fa-f]{8}$/, message: '请输入有效的 8 位十六进制水印', trigger: 'blur' },
-  ],
-  pointCount: [
-    { validator: validateIntegerRange('目标点数', 1000, 1000000), trigger: ['blur', 'change'] },
   ],
 }
 
@@ -361,8 +342,13 @@ const loadPointCloudFromUrl = (url) => {
 
       pointsObject.value = new THREE.Points(geometry, material)
       pointsObject.value.scale.setScalar(scale)
+      pointsObject.value.rotation.x = Math.PI
       scene.value.add(pointsObject.value)
       resetView()
+
+      if (result.value) {
+        result.value.pointsCount = geometry.attributes.position.count
+      }
     },
     undefined,
     () => {
@@ -437,7 +423,6 @@ const handleGenerate = async () => {
       model: formData.value.model,
       watermark_bits: formData.value.watermark,
       seed: formData.value.seed,
-      point_count: formData.value.pointCount,
     })
 
     const payload = response?.data || {}
@@ -448,7 +433,8 @@ const handleGenerate = async () => {
 
     const generatedAt = payload.generated_at ? new Date(payload.generated_at) : new Date()
     result.value = {
-      pointsCount: payload.point_count || formData.value.pointCount,
+      // 算法端返回的点数不再由接口直接返回，在3D模型加载完成后更新
+      pointsCount: 0, 
       watermark: payload.watermark_bits || formData.value.watermark,
       timeTaken: ((payload.elapsed_ms || 0) / 1000).toFixed(1),
       timestamp: generatedAt.toLocaleString('zh-CN', { hour12: false }),

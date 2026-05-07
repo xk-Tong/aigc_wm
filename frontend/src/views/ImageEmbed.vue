@@ -461,6 +461,8 @@ const handleGenerate = async () => {
   border: 1px solid #e2e8f0;
   padding: 12px;
   transition: all 0.2s ease;
+  font-weight: 600; /* 或 bold */
+  color: #1f2937; /* 更深的灰黑色 */
 }
 :deep(.custom-textarea .el-textarea__inner:hover) {
   border-color: #cbd5e1;

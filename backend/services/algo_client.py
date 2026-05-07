@@ -154,16 +154,15 @@ class AlgoClient:
 
     async def generate_watermarked_pointcloud(
         self, payload: dict[str, Any]
-    ) -> tuple[bytes, int, str, int]:
+    ) -> tuple[bytes, str, int]:
         """调用点云算法服务的生成接口，返回二进制点云文件。
 
         参数:
             payload: 发送给算法服务的请求 JSON。
 
         返回:
-            (pointcloud_bytes, point_count, file_format, algo_elapsed_ms)
+            (pointcloud_bytes, file_format, algo_elapsed_ms)
             - pointcloud_bytes: 点云文件的二进制内容。
-            - point_count: 实际点数。
             - file_format: 文件格式，如 "ply"。
             - algo_elapsed_ms: 算法端耗时（毫秒）。
 
@@ -202,11 +201,10 @@ class AlgoClient:
         if not pointcloud_bytes:
             raise AlgoServiceError("点云算法服务返回了空数据", status_code=502)
 
-        point_count = int(response.headers.get("X-Point-Count", "0"))
         file_format = (response.headers.get("X-File-Format") or "ply").lower()
         algo_elapsed_ms = int(response.headers.get("X-Elapsed-Ms", "0"))
 
-        return pointcloud_bytes, point_count, file_format, algo_elapsed_ms
+        return pointcloud_bytes, file_format, algo_elapsed_ms
 
     async def extract_watermark_from_pointcloud(
         self,
