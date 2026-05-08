@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 backend/storage/
 backend/storage_pointcloud/
+backend/storage_mesh/
 # Frontend
 frontend/node_modules/
 

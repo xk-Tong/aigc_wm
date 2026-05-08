@@ -4,20 +4,24 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from config.service_conf import BIZ_IMAGE_STORAGE_ROOT, BIZ_POINTCLOUD_STORAGE_ROOT
-from routers import auth, image, pointcloud
+from config.service_conf import BIZ_IMAGE_STORAGE_ROOT, BIZ_MESH_STORAGE_ROOT, BIZ_POINTCLOUD_STORAGE_ROOT
+from routers import auth, image, mesh, pointcloud
 
 # 创建 FastAPI 应用并挂载业务路由。
 app = FastAPI()
 app.include_router(auth.router)
 app.include_router(image.router)
 app.include_router(pointcloud.router)
+app.include_router(mesh.router)
 
 Path(BIZ_IMAGE_STORAGE_ROOT).mkdir(parents=True, exist_ok=True)
 app.mount("/storage", StaticFiles(directory=BIZ_IMAGE_STORAGE_ROOT), name="storage")
 
 Path(BIZ_POINTCLOUD_STORAGE_ROOT).mkdir(parents=True, exist_ok=True)
 app.mount("/storage_pointcloud", StaticFiles(directory=BIZ_POINTCLOUD_STORAGE_ROOT), name="storage_pointcloud")
+
+Path(BIZ_MESH_STORAGE_ROOT).mkdir(parents=True, exist_ok=True)
+app.mount("/storage_mesh", StaticFiles(directory=BIZ_MESH_STORAGE_ROOT), name="storage_mesh")
 
 app.add_middleware(
     CORSMiddleware,

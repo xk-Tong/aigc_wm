@@ -38,3 +38,18 @@ BIZ_POINTCLOUD_STORAGE_ROOT = os.getenv(
     "BIZ_POINTCLOUD_STORAGE_ROOT",
     str((BACKEND_ROOT / "storage_pointcloud").resolve()),
 )
+
+# ALGO_MESH_BASE_URL = os.getenv("ALGO_MESH_BASE_URL", "http://127.0.0.1:9003").rstrip("/")
+ALGO_MESH_BASE_URL = os.getenv("ALGO_MESH_BASE_URL", "http://10.1.115.170:8002").rstrip("/")
+ALGO_MESH_TIMEOUT_SECONDS = float(os.getenv("ALGO_MESH_TIMEOUT_SECONDS", "180"))
+ALGO_MESH_API_KEY = os.getenv("ALGO_MESH_API_KEY", "")
+MESH_REQUIRE_AUTH = os.getenv("MESH_REQUIRE_AUTH", "true").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+
+BIZ_MESH_STORAGE_ROOT = os.getenv(
+    "BIZ_MESH_STORAGE_ROOT",
+    str((BACKEND_ROOT / "storage_mesh").resolve()),
+)
