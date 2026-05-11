@@ -6,7 +6,8 @@
       "Bash(python -c \"from schemas.mesh import GenerateWatermarkedMeshRequest, GenerateWatermarkedMeshResponse, ExtractMeshWatermarkResponse; print\\('schemas OK'\\)\")",
       "Bash(python -c \"from services.algo_client import algo_client; print\\('algo_client OK:', hasattr\\(algo_client, 'generate_watermarked_mesh'\\), hasattr\\(algo_client, 'extract_watermark_from_mesh'\\)\\)\")",
       "Bash(python -c \"from routers.mesh import router; print\\('router OK:', router.prefix\\)\")",
-      "Bash(python -c \"from main import app; routes = [r.path for r in app.routes if hasattr\\(r, 'path'\\)]; print\\('mesh routes:', [r for r in routes if 'mesh' in r]\\)\")"
+      "Bash(python -c \"from main import app; routes = [r.path for r in app.routes if hasattr\\(r, 'path'\\)]; print\\('mesh routes:', [r for r in routes if 'mesh' in r]\\)\")",
+      "Bash(git *)"
     ]
   }
 }
