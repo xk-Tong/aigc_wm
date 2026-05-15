@@ -46,13 +46,13 @@
             </el-form-item>
 
             <!-- 3. 水印信息输入 -->
-            <el-form-item label="水印信息 (32位二进制)" prop="watermark">
+            <el-form-item label="水印信息 (8位十六进制)" prop="watermark">
               <div class="flex gap-2 w-full">
                 <el-input
                   v-model="formData.watermark"
-                  placeholder="请输入32位二进制水印，如 10101010..."
+                  placeholder="请输入8位十六进制水印，如 A1B2C3D4"
                   size="large"
-                  maxlength="32"
+                  maxlength="8"
                   class="flex-1 font-mono"
                 />
                 <el-button size="large" @click="generateRandomWatermark" class="shrink-0">
@@ -326,8 +326,8 @@ const formRules = {
     { min: 1, max: 2000, message: '提示词长度需在 1-2000 字符之间', trigger: 'blur' },
   ],
   watermark: [
-    { required: true, message: '请输入 32 位二进制水印', trigger: 'blur' },
-    { pattern: /^[01]{32}$/, message: '请输入有效的 32 位二进制水印', trigger: 'blur' },
+    { required: true, message: '请输入 8 位十六进制水印', trigger: 'blur' },
+    { pattern: /^[0-9A-Fa-f]{8}$/, message: '请输入有效的 8 位十六进制水印', trigger: 'blur' },
   ],
   width: [
     { validator: validateIntegerRange('宽度', 512, 2048), trigger: ['blur', 'change'] },
@@ -347,19 +347,21 @@ const zoomLevel = ref(1)
 const compareMode = ref('side')  // 'side' | 'slider'
 const sliderPos = ref(50)        // 叠加模式下滑块位置百分比
 
-// 随机生成 32 位二进制水印
+const hexToBinary = (hex) => parseInt(hex, 16).toString(2).padStart(32, '0')
+const binaryToHex = (binary) => parseInt(binary, 2).toString(16).toUpperCase().padStart(8, '0')
+
 const generateRandomWatermark = () => {
-  let binaryStr = ''
-  for (let i = 0; i < 32; i++) {
-    binaryStr += Math.random() > 0.5 ? '1' : '0'
+  const hexChars = '0123456789ABCDEF'
+  let hexStr = ''
+  for (let i = 0; i < 8; i++) {
+    hexStr += hexChars[Math.floor(Math.random() * 16)]
   }
-  formData.value.watermark = binaryStr
+  formData.value.watermark = hexStr
 }
 
-// 格式化水印 (每 8 位加一个空格)
 const formattedWatermark = computed(() => {
   if (!result.value || !result.value.watermark) return ''
-  return result.value.watermark.replace(/(.{8})/g, '$1 ').trim()
+  return result.value.watermark
 })
 
 // 复制水印到剪贴板
@@ -405,7 +407,7 @@ const handleGenerate = async () => {
     const response = await request.post('/api/v1/image/generate-watermarked', {
       prompt: formData.value.prompt,
       model: formData.value.model,
-      watermark_bits: formData.value.watermark,
+      watermark_bits: hexToBinary(formData.value.watermark),
       width: formData.value.width,
       height: formData.value.height,
       guidance_scale: formData.value.guidance_scale,
@@ -420,7 +422,7 @@ const handleGenerate = async () => {
       originalUrl: payload.original_image_url,
       watermarkedUrl: payload.watermarked_image_url,
       downloadUrl: payload.download_url || payload.watermarked_image_url,
-      watermark: payload.watermark_bits || formData.value.watermark,
+      watermark: payload.watermark_bits ? binaryToHex(payload.watermark_bits) : formData.value.watermark,
       timeTaken: ((payload.elapsed_ms || 0) / 1000).toFixed(1),
       timestamp: generatedAt.toLocaleString('zh-CN', { hour12: false }),
     }

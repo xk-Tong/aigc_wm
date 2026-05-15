@@ -36,13 +36,13 @@
             </el-form-item>
 
             <!-- 水印信息：32 位二进制 -->
-            <el-form-item label="水印信息 (32位二进制)" prop="watermark">
+            <el-form-item label="水印信息 (8位十六进制)" prop="watermark">
               <div class="flex gap-2 w-full">
                 <el-input
                   v-model="formData.watermark"
-                  placeholder="请输入32位二进制水印..."
+                  placeholder="请输入8位十六进制水印，如 A1B2C3D4"
                   size="large"
-                  maxlength="32"
+                  maxlength="8"
                   class="flex-1 font-mono"
                 />
                 <el-button size="large" @click="generateRandomWatermark" class="shrink-0">
@@ -136,7 +136,7 @@
 
               <div class="bg-white rounded-xl p-4 border border-teal-100/50 flex justify-between items-center shadow-sm mb-4">
                 <span class="font-mono text-lg text-gray-800 tracking-widest font-bold">
-                  {{ result.watermark }}
+                  {{ formattedWatermark }}
                 </span>
                 <el-button circle size="small" @click="copyWatermark" title="复制水印">
                   <el-icon><CopyDocument /></el-icon>
@@ -158,7 +158,7 @@
 </template>
 
 <script setup>
-import { ref, onBeforeUnmount, shallowRef } from 'vue'
+import { ref, computed, onBeforeUnmount, shallowRef } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '../utils/request'
 import * as THREE from 'three'
@@ -184,8 +184,8 @@ const formRules = {
     { min: 1, max: 2000, message: '描述长度需在 1-2000 字符之间', trigger: 'blur' },
   ],
   watermark: [
-    { required: true, message: '请输入 32 位二进制水印', trigger: 'blur' },
-    { pattern: /^[01]{32}$/, message: '请输入有效的 32 位二进制水印', trigger: 'blur' },
+    { required: true, message: '请输入 8 位十六进制水印', trigger: 'blur' },
+    { pattern: /^[0-9A-Fa-f]{8}$/, message: '请输入有效的 8 位十六进制水印', trigger: 'blur' },
   ],
 }
 
@@ -367,10 +367,14 @@ const toggleFullscreen = () => {
 
 // ==================== 水印与生成 ====================
 
+const hexToBinary = (hex) => parseInt(hex, 16).toString(2).padStart(32, '0')
+const binaryToHex = (binary) => parseInt(binary, 2).toString(16).toUpperCase().padStart(8, '0')
+
 const generateRandomWatermark = () => {
-  let binaryStr = ''
-  for (let i = 0; i < 32; i++) binaryStr += Math.random() > 0.5 ? '1' : '0'
-  formData.value.watermark = binaryStr
+  const hexChars = '0123456789ABCDEF'
+  let hexStr = ''
+  for (let i = 0; i < 8; i++) hexStr += hexChars[Math.floor(Math.random() * 16)]
+  formData.value.watermark = hexStr
 }
 
 const copyWatermark = async () => {
@@ -381,6 +385,11 @@ const copyWatermark = async () => {
     ElMessage.error('复制失败')
   }
 }
+
+const formattedWatermark = computed(() => {
+  if (!result.value || !result.value.watermark) return ''
+  return result.value.watermark
+})
 
 const handleDownload = () => {
   if (!result.value?.downloadUrl) {
@@ -405,7 +414,7 @@ const handleGenerate = async () => {
     const response = await request.post('/api/v1/mesh/generate-watermarked', {
       prompt: formData.value.prompt,
       model: formData.value.model,
-      watermark_bits: formData.value.watermark,
+      watermark_bits: hexToBinary(formData.value.watermark),
       seed: formData.value.seed,
     }, { timeout: 200000 })
 
@@ -419,7 +428,7 @@ const handleGenerate = async () => {
     const generatedAt = payload.generated_at ? new Date(payload.generated_at) : new Date()
     result.value = {
       facesCount: 0,
-      watermark: payload.watermark_bits || formData.value.watermark,
+      watermark: payload.watermark_bits ? binaryToHex(payload.watermark_bits) : formData.value.watermark,
       timeTaken: ((payload.elapsed_ms || 0) / 1000).toFixed(1),
       timestamp: generatedAt.toLocaleString('zh-CN', { hour12: false }),
       downloadUrl: payload.download_url || payload.mesh_url,

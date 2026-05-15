@@ -202,6 +202,8 @@ const removeFile = () => {
 
 // ==================== 水印提取 ====================
 
+const binaryToHex = (binary) => parseInt(binary, 2).toString(16).toUpperCase().padStart(8, '0')
+
 const copyWatermark = async () => {
   await navigator.clipboard.writeText(result.value.watermark)
   ElMessage.success('水印内容已复制')
@@ -225,11 +227,13 @@ const startExtraction = async () => {
       throw new Error('算法服务返回了非法的水印数据')
     }
 
+    const hexWatermark = binaryToHex(watermarkBits)
+
     isExtracting.value = false
 
     result.value = {
       status: 'success',
-      watermark: watermarkBits,
+      watermark: hexWatermark,
       timeTaken: ((payload.elapsed_ms || 0) / 1000).toFixed(2),
     }
     ElMessage.success('水印提取成功！')

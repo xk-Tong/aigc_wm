@@ -107,9 +107,6 @@
               <p class="font-mono text-2xl text-gray-800 tracking-widest font-bold mb-3">
                 {{ formattedWatermark }}
               </p>
-              <p class="text-xs text-gray-400 font-mono break-all">
-                原始二进制: {{ result.watermark }}
-              </p>
               
               <!-- 复制按钮 -->
               <el-button 
@@ -231,10 +228,12 @@ const resultCardClass = computed(() => {
   return 'border-gray-100'
 })
 
-// 格式化水印 (每 8 位加一个空格)
+const binaryToHex = (binary) => parseInt(binary, 2).toString(16).toUpperCase().padStart(8, '0')
+
+// 格式化水印
 const formattedWatermark = computed(() => {
   if (!result.value || !result.value.watermark) return ''
-  return result.value.watermark.replace(/(.{8})/g, '$1 ').trim()
+  return result.value.watermark
 })
 
 // 复制水印到剪贴板
@@ -266,11 +265,13 @@ const startExtraction = async () => {
       throw new Error('算法服务返回了非法的水印数据')
     }
 
+    const hexWatermark = binaryToHex(watermarkBits)
+
     isExtracting.value = false
 
     result.value = {
       status: 'success',
-      watermark: watermarkBits,
+      watermark: hexWatermark,
       timeTaken: ((payload.elapsed_ms || 0) / 1000).toFixed(2),
       timestamp: payload.extracted_at
         ? new Date(payload.extracted_at).toLocaleString('zh-CN', { hour12: false })
