@@ -63,6 +63,18 @@ const router = createRouter({
           meta: { title: '网格水印提取' }
         },
         {
+          path: 'gs-wm/embed',
+          name: 'gs-embed',
+          component: () => import('../views/GsEmbed.vue'),
+          meta: { title: '3DGS水印嵌入' }
+        },
+        {
+          path: 'gs-wm/extract',
+          name: 'gs-extract',
+          component: () => import('../views/GsExtract.vue'),
+          meta: { title: '3DGS水印提取' }
+        },
+        {
           path: 'tracing',
           name: 'tracing',
           component: () => import('../views/Placeholder.vue'),

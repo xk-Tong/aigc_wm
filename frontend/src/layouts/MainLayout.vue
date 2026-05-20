@@ -55,6 +55,15 @@
             <el-menu-item index="/mesh-wm/extract">水印提取</el-menu-item>
           </el-sub-menu>
 
+          <el-sub-menu index="/gs-wm">
+            <template #title>
+              <el-icon><Histogram /></el-icon>
+              <span>3DGS水印</span>
+            </template>
+            <el-menu-item index="/gs-wm/embed">生成3DGS</el-menu-item>
+            <el-menu-item index="/gs-wm/extract">水印提取</el-menu-item>
+          </el-sub-menu>
+
           <el-menu-item index="/tracing">
             <el-icon><Search /></el-icon>
             <template #title>溯源验真</template>
