@@ -31,7 +31,7 @@
             <!-- 生成模型 -->
             <el-form-item label="生成模型">
               <el-select v-model="formData.model" size="large" class="w-full">
-                <el-option label="Gaussian Splatting (推荐)" value="gaussian-splatting" />
+                <el-option label="Trellis" value="trellis" />
               </el-select>
             </el-form-item>
 
@@ -180,7 +180,7 @@ const generateFormRef = ref(null)
 
 const formData = ref({
   prompt: '',
-  model: 'gaussian-splatting',
+  model: 'trellis',
   watermark: '',
   seed: null,
 })
@@ -209,14 +209,15 @@ const initViewer = async () => {
   if (!gsContainer.value) return
 
   // 先同步停止旧 viewer，避免与新 viewer 冲突
+  // 每次重新初始化前先停掉旧 viewer，避免 GPU 资源和渲染循环叠加。
   await cleanupViewer()
 
   const GS3D = await ensureGsplatLoaded()
 
   viewer.value = new GS3D.Viewer({
     rootElement: gsContainer.value,
-    cameraUp: [0, 1, 0],
-    initialCameraPosition: [0, 0, 6],
+    cameraUp: [0, -1, 0],
+    initialCameraPosition: [0, 0, 2],
     initialCameraLookAt: [0, 0, 0],
     dynamicScene: false,
     selfDrivenMode: true,
@@ -227,6 +228,7 @@ const loadGsFromUrl = async (url) => {
   if (!viewer.value) await initViewer()
   if (!viewer.value) return
 
+  // 后端返回的是可访问 URL，这里直接交给 gsplat.js 拉取并渲染。
   const GS3D = await ensureGsplatLoaded()
 
   try {
@@ -281,6 +283,7 @@ const cleanupViewer = async () => {
 
 // ==================== 水印与生成 ====================
 
+// 前端输入的是 8 位十六进制水印，提交给后端前先转成 32 位二进制串。
 const hexToBinary = (hex) => parseInt(hex, 16).toString(2).padStart(32, '0')
 const binaryToHex = (binary) => parseInt(binary, 2).toString(16).toUpperCase().padStart(8, '0')
 
@@ -290,6 +293,7 @@ const generateRandomWatermark = () => {
   for (let i = 0; i < 8; i++) hexStr += hexChars[Math.floor(Math.random() * 16)]
   formData.value.watermark = hexStr
 }
+    // 请求体字段要和后端 schema 保持一致，尤其是 watermark_bits 这个二进制字段。
 
 const copyWatermark = async () => {
   try {
@@ -305,12 +309,30 @@ const formattedWatermark = computed(() => {
   return result.value.watermark
 })
 
-const handleDownload = () => {
+const handleDownload = async () => {
   if (!result.value?.downloadUrl) {
     ElMessage.warning('暂无可下载的 3DGS 文件')
     return
   }
-  window.open(result.value.downloadUrl, '_blank', 'noopener,noreferrer')
+
+  try {
+    const response = await fetch(result.value.downloadUrl)
+    if (!response.ok) {
+      ElMessage.error('下载 3DGS 文件失败')
+      return
+    }
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = result.value.fileName || 'watermarked_3dgs.ply'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch {
+    ElMessage.error('下载 3DGS 文件失败，请检查网络连接')
+  }
 }
 
 const handleGenerate = async () => {
@@ -336,6 +358,7 @@ const handleGenerate = async () => {
     const payload = response?.data || {}
     isGenerating.value = false
 
+  // 生成完成后立即加载结果文件做预览。
     await initViewer()
     loadGsFromUrl(payload.gs_url)
 
@@ -347,6 +370,7 @@ const handleGenerate = async () => {
       timestamp: generatedAt.toLocaleString('zh-CN', { hour12: false }),
       downloadUrl: payload.download_url || payload.gs_url,
       gsUrl: payload.gs_url,
+      fileName: payload.gs_id ? `${payload.gs_id}.ply` : 'watermarked_3dgs.ply',
     }
 
     ElMessage.success('3DGS 模型生成并嵌入水印成功！')
@@ -361,6 +385,7 @@ const handleGenerate = async () => {
 
 onBeforeUnmount(() => {
   // 路由离开时：先同步 stop 停掉渲染循环（避免卡顿），再异步 dispose
+  // 组件卸载时释放 viewer 和 URL，防止路由切换后继续占用资源。
   const v = viewer.value
   viewer.value = null
   if (v) {

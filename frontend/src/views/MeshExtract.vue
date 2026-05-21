@@ -36,10 +36,10 @@
 
           <div v-else class="bg-gray-50 rounded-2xl p-4 border border-gray-200">
             <div class="flex flex-col items-center">
-              <div class="w-full h-[160px] rounded-xl bg-linear-to-br from-teal-900 to-gray-900 mb-4 flex items-center justify-center relative overflow-hidden shadow-inner">
+              <!-- <div class="w-full h-[160px] rounded-xl bg-linear-to-br from-teal-900 to-gray-900 mb-4 flex items-center justify-center relative overflow-hidden shadow-inner">
                 <div class="absolute inset-0 opacity-20" style="background-image: linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px); background-size: 20px 20px;"></div>
                 <el-icon class="text-5xl text-teal-300/80 z-10"><Box /></el-icon>
-              </div>
+              </div> -->
 
               <div class="w-full flex items-center justify-between bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
                 <div class="flex items-center gap-3 overflow-hidden">

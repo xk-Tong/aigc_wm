@@ -128,6 +128,8 @@ async def extract_watermark(
     if not mesh_file.filename:
         raise HTTPException(status_code=400, detail="请上传有效的网格模型文件")
 
+    started = perf_counter()
+
     file_bytes = await mesh_file.read()
     if not file_bytes:
         raise HTTPException(status_code=400, detail="上传的网格模型文件不能为空")
@@ -150,7 +152,6 @@ async def extract_watermark(
     with file_path.open("wb") as f:
         f.write(file_bytes)
 
-    started = perf_counter()
     try:
         algo_response = await algo_client.extract_watermark_from_mesh(
             file_name=mesh_file.filename,
@@ -164,7 +165,9 @@ async def extract_watermark(
     if not re.fullmatch(r"[01]{32}", watermark_bits):
         raise HTTPException(status_code=502, detail="算法服务返回了非法的水印数据")
 
-    elapsed_ms = int(algo_response.get("elapsed_ms") or ((perf_counter() - started) * 1000))
+    local_elapsed_ms = int((perf_counter() - started) * 1000)
+    algo_elapsed_ms = int(algo_response.get("elapsed_ms") or 0)
+    elapsed_ms = max(local_elapsed_ms, algo_elapsed_ms)
 
     return {
         "file_id": file_id,

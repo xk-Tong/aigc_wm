@@ -6,6 +6,7 @@ class GenerateWatermarkedGSRequest(BaseModel):
 
     prompt: str = Field(..., min_length=1, max_length=2000)
     model: str = Field(default="gaussian-splatting")
+    # 前端展示 8 位十六进制，这里实际接收的是转换后的 32 位二进制串。
     watermark_bits: str = Field(..., pattern=r"^[01]{32}$")
     seed: int | None = Field(default=None, ge=0)
 

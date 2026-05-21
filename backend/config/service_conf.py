@@ -55,7 +55,8 @@ BIZ_MESH_STORAGE_ROOT = os.getenv(
 )
 
 # 3DGS（3D Gaussian Splatting）算法服务配置。
-ALGO_GS_BASE_URL = os.getenv("ALGO_GS_BASE_URL", "http://127.0.0.1:9004").rstrip("/")
+# ALGO_GS_BASE_URL = os.getenv("ALGO_GS_BASE_URL", "http://127.0.0.1:9004").rstrip("/")
+ALGO_GS_BASE_URL = os.getenv("ALGO_GS_BASE_URL", "http://10.1.115.170:8003").rstrip("/")
 ALGO_GS_TIMEOUT_SECONDS = float(os.getenv("ALGO_GS_TIMEOUT_SECONDS", "180"))
 ALGO_GS_API_KEY = os.getenv("ALGO_GS_API_KEY", "")
 GS_REQUIRE_AUTH = os.getenv("GS_REQUIRE_AUTH", "true").lower() in {

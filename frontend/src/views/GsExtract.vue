@@ -36,10 +36,10 @@
 
           <div v-else class="bg-gray-50 rounded-2xl p-4 border border-gray-200">
             <div class="flex flex-col items-center">
-              <div class="w-full h-[160px] rounded-xl bg-linear-to-br from-violet-900 to-gray-900 mb-4 flex items-center justify-center relative overflow-hidden shadow-inner">
+              <!-- <div class="w-full h-[160px] rounded-xl bg-linear-to-br from-violet-900 to-gray-900 mb-4 flex items-center justify-center relative overflow-hidden shadow-inner">
                 <div class="absolute inset-0 opacity-20" style="background-image: linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px); background-size: 20px 20px;"></div>
                 <el-icon class="text-5xl text-violet-300/80 z-10"><Histogram /></el-icon>
-              </div>
+              </div> -->
 
               <div class="w-full flex items-center justify-between bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
                 <div class="flex items-center gap-3 overflow-hidden">
@@ -169,6 +169,7 @@ const handleFileChange = (uploadFile) => {
   const file = uploadFile.raw
   if (!file) return
 
+  // 前端先做一次轻量校验，避免无效文件进入提取请求。
   if (file.size > 100 * 1024 * 1024) {
     ElMessage.error('3DGS 文件大小不能超过 100MB！')
     return
@@ -191,6 +192,7 @@ const handleFileChange = (uploadFile) => {
   result.value = null
 
   nextTick(() => {
+    // 文件校验通过后立即预览，方便用户确认上传内容。
     loadUserGs(file)
   })
 }
@@ -212,8 +214,8 @@ const initViewer = async () => {
 
   viewer.value = new GS3D.Viewer({
     rootElement: gsContainer.value,
-    cameraUp: [0, 1, 0],
-    initialCameraPosition: [0, 0, 6],
+    cameraUp: [0, -1, 0],
+    initialCameraPosition: [0, 0, 2],
     initialCameraLookAt: [0, 0, 0],
     dynamicScene: false,
     selfDrivenMode: true,
@@ -224,6 +226,7 @@ const loadUserGs = async (file) => {
   await initViewer()
   if (!viewer.value) return
 
+  // blob URL 仅用于本地预览，组件卸载或重选文件时会主动 revoke。
   objectUrl = URL.createObjectURL(file)
 
   const GS3D = await ensureGsplatLoaded()
@@ -266,6 +269,7 @@ const cleanupViewer = async () => {
 
 // ==================== 水印提取 ====================
 
+// 提取结果以二进制返回，界面上再转成 8 位十六进制方便人工核对。
 const binaryToHex = (binary) => parseInt(binary, 2).toString(16).toUpperCase().padStart(8, '0')
 
 const copyWatermark = async () => {
@@ -281,12 +285,14 @@ const startExtraction = async () => {
 
   try {
     const formDataObj = new FormData()
+    // 字段名 gs_file 要和后端 FastAPI 接口保持一致。
     formDataObj.append('gs_file', uploadedFile.value)
 
     const response = await request.post('/api/v1/gs/extract-watermark', formDataObj)
     const payload = response?.data || {}
     const watermarkBits = payload.watermark_bits || payload.extracted_watermark || ''
 
+    // 提取结果必须是 32 位二进制串，否则说明算法服务返回异常数据。
     if (!/^[01]{32}$/.test(watermarkBits)) {
       throw new Error('算法服务返回了非法的水印数据')
     }
@@ -312,6 +318,7 @@ const startExtraction = async () => {
 // ==================== 生命周期清理 ====================
 
 onBeforeUnmount(() => {
+  // 卸载前主动释放本地预览 URL 和 viewer，避免切页后残留资源。
   if (objectUrl) {
     URL.revokeObjectURL(objectUrl)
     objectUrl = null

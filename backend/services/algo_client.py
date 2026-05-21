@@ -391,6 +391,7 @@ class AlgoClient:
         返回:
             (gs_bytes, file_format, algo_elapsed_ms, gaussian_count)
         """
+        # 3DGS 生成链路和其他媒体一致：请求 JSON 转发给独立算法服务，再接收二进制结果。
         headers = {}
         if ALGO_GS_API_KEY:
             headers["X-API-Key"] = ALGO_GS_API_KEY
@@ -436,6 +437,7 @@ class AlgoClient:
         content_type: str | None = None,
     ) -> dict[str, Any]:
         """调用 3DGS 算法服务的水印提取接口。"""
+        # 提取接口使用 multipart 上传，与前端上传表单和 FastAPI File 约定一致。
         headers = {}
         if ALGO_GS_API_KEY:
             headers["X-API-Key"] = ALGO_GS_API_KEY
@@ -488,5 +490,5 @@ class AlgoClient:
         return data
 
 
-# 提供模块级单例，方便路由直接复用。
+# 提供模块级单例，避免每个请求都重复创建 HTTP 客户端封装对象。
 algo_client = AlgoClient()
