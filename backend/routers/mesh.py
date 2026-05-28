@@ -5,32 +5,22 @@ from time import perf_counter
 from typing import Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, File, Header, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from config.service_conf import BIZ_MESH_STORAGE_ROOT, MESH_REQUIRE_AUTH
-from crud import auth as crud_auth
+from config.db_conf import get_db
+from config.service_conf import BIZ_MESH_STORAGE_ROOT
+from deps import get_current_user
+from models.record import WmTaskRecord
 from schemas.mesh import (
     ExtractMeshWatermarkResponse,
     GenerateWatermarkedMeshRequest,
     GenerateWatermarkedMeshResponse,
 )
 from services.algo_client import AlgoServiceError, algo_client
+from services.audit_log import log_operation
 
 router = APIRouter(prefix="/api/v1/mesh", tags=["mesh"])
-
-
-def _extract_token(authorization: Optional[str]) -> Optional[str]:
-    if not authorization:
-        return None
-
-    value = authorization.strip()
-    if not value:
-        return None
-
-    if value.lower().startswith("bearer "):
-        value = value[7:].strip()
-
-    return value or None
 
 
 def _resolve_mesh_extension(filename: Optional[str]) -> str:
@@ -51,18 +41,10 @@ def _resolve_mesh_extension(filename: Optional[str]) -> str:
 async def generate_watermarked_mesh(
     body: GenerateWatermarkedMeshRequest,
     request: Request,
-    authorization: Optional[str] = Header(default=None),
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """生成含水印网格模型并返回可访问 URL。"""
-
-    if MESH_REQUIRE_AUTH:
-        token = _extract_token(authorization)
-        if not token:
-            raise HTTPException(status_code=401, detail="缺少认证信息")
-
-        session_data = await crud_auth.verify_session_token(token, refresh_ttl=True)
-        if not session_data:
-            raise HTTPException(status_code=401, detail="登录状态已失效，请重新登录")
 
     payload = body.model_dump()
     started = perf_counter()
@@ -71,6 +53,7 @@ async def generate_watermarked_mesh(
             await algo_client.generate_watermarked_mesh(payload)
         )
     except AlgoServiceError as exc:
+        await log_operation(db, user, "embed", "mesh", request, "fail", {"error": exc.message})
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
     if file_format not in {"obj", "stl", "gltf", "glb"}:
@@ -94,6 +77,24 @@ async def generate_watermarked_mesh(
     local_elapsed_ms = int((perf_counter() - started) * 1000)
     elapsed_ms = max(local_elapsed_ms, algo_elapsed_ms)
 
+    record = WmTaskRecord(
+        user_id=user["id"],
+        username=user["username"],
+        media_type="mesh",
+        operation_type="embed",
+        watermark_bits=body.watermark_bits,
+        prompt=body.prompt,
+        model=body.model,
+        watermarked_file_url=mesh_url,
+        download_url=mesh_url,
+        elapsed_ms=elapsed_ms,
+        status="success",
+        file_id=mesh_id,
+    )
+    db.add(record)
+    await db.commit()
+    await log_operation(db, user, "embed", "mesh", request, "success", {"watermark": body.watermark_bits})
+
     return {
         "mesh_id": mesh_id,
         "mesh_url": mesh_url,
@@ -112,18 +113,10 @@ async def generate_watermarked_mesh(
 )
 async def extract_watermark(
     mesh_file: UploadFile = File(...),
-    authorization: Optional[str] = Header(default=None),
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """接收用户上传的网格模型文件，提取其中嵌入的 32 位二进制水印。"""
-
-    if MESH_REQUIRE_AUTH:
-        token = _extract_token(authorization)
-        if not token:
-            raise HTTPException(status_code=401, detail="缺少认证信息")
-
-        session_data = await crud_auth.verify_session_token(token, refresh_ttl=True)
-        if not session_data:
-            raise HTTPException(status_code=401, detail="登录状态已失效，请重新登录")
 
     if not mesh_file.filename:
         raise HTTPException(status_code=400, detail="请上传有效的网格模型文件")
@@ -168,6 +161,22 @@ async def extract_watermark(
     local_elapsed_ms = int((perf_counter() - started) * 1000)
     algo_elapsed_ms = int(algo_response.get("elapsed_ms") or 0)
     elapsed_ms = max(local_elapsed_ms, algo_elapsed_ms)
+
+    record = WmTaskRecord(
+        user_id=user["id"],
+        username=user["username"],
+        media_type="mesh",
+        operation_type="extract",
+        source_file_name=mesh_file.filename,
+        source_file_size=len(file_bytes),
+        extracted_bits=watermark_bits,
+        elapsed_ms=elapsed_ms,
+        status="success",
+        file_id=file_id,
+    )
+    db.add(record)
+    await db.commit()
+    await log_operation(db, user, "extract", "mesh", request, "success", {"watermark": watermark_bits})
 
     return {
         "file_id": file_id,

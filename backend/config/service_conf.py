@@ -11,13 +11,6 @@ ALGO_IMAGE_BASE_URL = os.getenv("ALGO_IMAGE_BASE_URL", "http://10.1.115.170:8000
 ALGO_IMAGE_TIMEOUT_SECONDS = float(os.getenv("ALGO_IMAGE_TIMEOUT_SECONDS", "120"))
 # 服务间鉴权密钥：如果算法服务开启校验，可在请求头中携带。
 ALGO_IMAGE_API_KEY = os.getenv("ALGO_IMAGE_API_KEY", "")
-# 图像接口是否要求登录鉴权：本地联调可设为 false，线上建议保持 true。
-IMAGE_REQUIRE_AUTH = os.getenv("IMAGE_REQUIRE_AUTH", "true").lower() in {
-    "1",
-    "true",
-    "yes",
-}
-
 # 业务后端本地存储目录：生成图片会保存到该路径下。
 BIZ_IMAGE_STORAGE_ROOT = os.getenv(
     "BIZ_IMAGE_STORAGE_ROOT",
@@ -28,12 +21,6 @@ BIZ_IMAGE_STORAGE_ROOT = os.getenv(
 ALGO_POINTCLOUD_BASE_URL = os.getenv("ALGO_POINTCLOUD_BASE_URL", "http://10.1.115.170:8001").rstrip("/")
 ALGO_POINTCLOUD_TIMEOUT_SECONDS = float(os.getenv("ALGO_POINTCLOUD_TIMEOUT_SECONDS", "180"))
 ALGO_POINTCLOUD_API_KEY = os.getenv("ALGO_POINTCLOUD_API_KEY", "")
-POINTCLOUD_REQUIRE_AUTH = os.getenv("POINTCLOUD_REQUIRE_AUTH", "true").lower() in {
-    "1",
-    "true",
-    "yes",
-}
-
 BIZ_POINTCLOUD_STORAGE_ROOT = os.getenv(
     "BIZ_POINTCLOUD_STORAGE_ROOT",
     str((BACKEND_ROOT / "storage_pointcloud").resolve()),
@@ -43,12 +30,6 @@ BIZ_POINTCLOUD_STORAGE_ROOT = os.getenv(
 ALGO_MESH_BASE_URL = os.getenv("ALGO_MESH_BASE_URL", "http://10.1.115.170:8002").rstrip("/")
 ALGO_MESH_TIMEOUT_SECONDS = float(os.getenv("ALGO_MESH_TIMEOUT_SECONDS", "180"))
 ALGO_MESH_API_KEY = os.getenv("ALGO_MESH_API_KEY", "")
-MESH_REQUIRE_AUTH = os.getenv("MESH_REQUIRE_AUTH", "true").lower() in {
-    "1",
-    "true",
-    "yes",
-}
-
 BIZ_MESH_STORAGE_ROOT = os.getenv(
     "BIZ_MESH_STORAGE_ROOT",
     str((BACKEND_ROOT / "storage_mesh").resolve()),
@@ -59,12 +40,6 @@ BIZ_MESH_STORAGE_ROOT = os.getenv(
 ALGO_GS_BASE_URL = os.getenv("ALGO_GS_BASE_URL", "http://10.1.115.170:8003").rstrip("/")
 ALGO_GS_TIMEOUT_SECONDS = float(os.getenv("ALGO_GS_TIMEOUT_SECONDS", "180"))
 ALGO_GS_API_KEY = os.getenv("ALGO_GS_API_KEY", "")
-GS_REQUIRE_AUTH = os.getenv("GS_REQUIRE_AUTH", "true").lower() in {
-    "1",
-    "true",
-    "yes",
-}
-
 BIZ_GS_STORAGE_ROOT = os.getenv(
     "BIZ_GS_STORAGE_ROOT",
     str((BACKEND_ROOT / "storage_gs").resolve()),

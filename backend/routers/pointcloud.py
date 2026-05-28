@@ -5,32 +5,22 @@ from time import perf_counter
 from typing import Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, File, Header, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from config.service_conf import BIZ_POINTCLOUD_STORAGE_ROOT, POINTCLOUD_REQUIRE_AUTH
-from crud import auth as crud_auth
+from config.db_conf import get_db
+from config.service_conf import BIZ_POINTCLOUD_STORAGE_ROOT
+from deps import get_current_user
+from models.record import WmTaskRecord
 from schemas.pointcloud import (
     ExtractPointcloudWatermarkResponse,
     GenerateWatermarkedPointcloudRequest,
     GenerateWatermarkedPointcloudResponse,
 )
 from services.algo_client import AlgoServiceError, algo_client
+from services.audit_log import log_operation
 
 router = APIRouter(prefix="/api/v1/pointcloud", tags=["pointcloud"])
-
-
-def _extract_token(authorization: Optional[str]) -> Optional[str]:
-    if not authorization:
-        return None
-
-    value = authorization.strip()
-    if not value:
-        return None
-
-    if value.lower().startswith("bearer "):
-        value = value[7:].strip()
-
-    return value or None
 
 
 def _resolve_pointcloud_extension(filename: Optional[str]) -> str:
@@ -51,18 +41,10 @@ def _resolve_pointcloud_extension(filename: Optional[str]) -> str:
 async def generate_watermarked_pointcloud(
     body: GenerateWatermarkedPointcloudRequest,
     request: Request,
-    authorization: Optional[str] = Header(default=None),
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """生成含水印点云并返回可访问 URL。"""
-
-    if POINTCLOUD_REQUIRE_AUTH:
-        token = _extract_token(authorization)
-        if not token:
-            raise HTTPException(status_code=401, detail="缺少认证信息")
-
-        session_data = await crud_auth.verify_session_token(token, refresh_ttl=True)
-        if not session_data:
-            raise HTTPException(status_code=401, detail="登录状态已失效，请重新登录")
 
     payload = body.model_dump()
     started = perf_counter()
@@ -71,6 +53,7 @@ async def generate_watermarked_pointcloud(
             await algo_client.generate_watermarked_pointcloud(payload)
         )
     except AlgoServiceError as exc:
+        await log_operation(db, user, "embed", "pointcloud", request, "fail", {"error": exc.message})
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
     if file_format not in {"ply", "pcd", "xyz", "obj", "stl"}:
@@ -94,6 +77,24 @@ async def generate_watermarked_pointcloud(
     local_elapsed_ms = int((perf_counter() - started) * 1000)
     elapsed_ms = max(local_elapsed_ms, algo_elapsed_ms)
 
+    record = WmTaskRecord(
+        user_id=user["id"],
+        username=user["username"],
+        media_type="pointcloud",
+        operation_type="embed",
+        watermark_bits=body.watermark_bits,
+        prompt=body.prompt,
+        model=body.model,
+        watermarked_file_url=pointcloud_url,
+        download_url=pointcloud_url,
+        elapsed_ms=elapsed_ms,
+        status="success",
+        file_id=pointcloud_id,
+    )
+    db.add(record)
+    await db.commit()
+    await log_operation(db, user, "embed", "pointcloud", request, "success", {"watermark": body.watermark_bits})
+
     return {
         "pointcloud_id": pointcloud_id,
         "pointcloud_url": pointcloud_url,
@@ -112,18 +113,10 @@ async def generate_watermarked_pointcloud(
 )
 async def extract_watermark(
     pointcloud_file: UploadFile = File(...),
-    authorization: Optional[str] = Header(default=None),
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """接收用户上传的点云文件，提取其中嵌入的 6 位十六进制水印。"""
-
-    if POINTCLOUD_REQUIRE_AUTH:
-        token = _extract_token(authorization)
-        if not token:
-            raise HTTPException(status_code=401, detail="缺少认证信息")
-
-        session_data = await crud_auth.verify_session_token(token, refresh_ttl=True)
-        if not session_data:
-            raise HTTPException(status_code=401, detail="登录状态已失效，请重新登录")
 
     if not pointcloud_file.filename:
         raise HTTPException(status_code=400, detail="请上传有效的点云文件")
@@ -168,6 +161,22 @@ async def extract_watermark(
     local_elapsed_ms = int((perf_counter() - started) * 1000)
     algo_elapsed_ms = int(algo_response.get("elapsed_ms") or 0)
     elapsed_ms = max(local_elapsed_ms, algo_elapsed_ms)
+
+    record = WmTaskRecord(
+        user_id=user["id"],
+        username=user["username"],
+        media_type="pointcloud",
+        operation_type="extract",
+        source_file_name=pointcloud_file.filename,
+        source_file_size=len(file_bytes),
+        extracted_bits=watermark_bits,
+        elapsed_ms=elapsed_ms,
+        status="success",
+        file_id=file_id,
+    )
+    db.add(record)
+    await db.commit()
+    await log_operation(db, user, "extract", "pointcloud", request, "success", {"watermark": watermark_bits})
 
     return {
         "file_id": file_id,

@@ -8,17 +8,18 @@ class Base(DeclarativeBase):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
-# class User(Base):
-#     __tablename__ = "sys_user"
+class UserRole:
+    USER = "USER"
+    ADMIN = "ADMIN"
+    SUPER_ADMIN = "SUPER_ADMIN"
 
-#     id = Column(Integer, primary_key=True, index=True)
-#     username = Column(String(64), unique=True, index=True, nullable=False)
-#     password_hash = Column(String(256), nullable=False)
-#     email = Column(String(128), unique=True, index=True)
-#     role = Column(String(20), default="USER")
-#     status = Column(Integer, default=1) # 0=禁用 1=正常
-#     created_at = Column(DateTime, default=datetime.utcnow)
-#     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+ROLE_HIERARCHY = {
+    UserRole.USER: 0,
+    UserRole.ADMIN: 1,
+    UserRole.SUPER_ADMIN: 2,
+}
+
 
 class User(Base):
     __tablename__ = "sys_user"

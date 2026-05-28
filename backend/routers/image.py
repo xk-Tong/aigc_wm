@@ -7,39 +7,23 @@ from time import perf_counter
 from typing import Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, File, Header, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from config.service_conf import BIZ_IMAGE_STORAGE_ROOT, IMAGE_REQUIRE_AUTH
-from crud import auth as crud_auth
+from config.db_conf import get_db
+from config.service_conf import BIZ_IMAGE_STORAGE_ROOT
+from deps import get_current_user
+from models.record import WmTaskRecord
 from schemas.image import (
     ExtractWatermarkResponse,
     GenerateWatermarkedImageRequest,
     GenerateWatermarkedImageResponse,
 )
 from services.algo_client import AlgoServiceError, algo_client
+from services.audit_log import log_operation
 
 # 图像业务路由：负责接收前端请求并编排“算法调用 + 文件落盘 + URL 返回”。
 router = APIRouter(prefix="/api/v1/image", tags=["image"])
-
-
-def _extract_token(authorization: Optional[str]) -> Optional[str]:
-    """从 Authorization 请求头中提取 token。
-
-    支持两种输入：
-    1) "Bearer xxx"
-    2) 直接传 "xxx"
-    """
-    if not authorization:
-        return None
-
-    value = authorization.strip()
-    if not value:
-        return None
-
-    if value.lower().startswith("bearer "):
-        value = value[7:].strip()
-
-    return value or None
 
 
 def _resolve_image_extension(filename: Optional[str], content_type: Optional[str]) -> str:
@@ -69,35 +53,16 @@ def _resolve_image_extension(filename: Optional[str], content_type: Optional[str
 async def generate_watermarked_image(
     body: GenerateWatermarkedImageRequest,
     request: Request,
-    authorization: Optional[str] = Header(default=None),
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    """生成含水印图像并返回可访问 URL。
-
-    参数:
-        body: 前端提交的生成参数（提示词、模型、水印等）。
-        request: FastAPI 请求对象，用于拼接静态资源 URL。
-        authorization: 可选认证头，开启鉴权时必填。
-
-    返回:
-        GenerateWatermarkedImageResponse 对应的字典数据。
-    """
-
-    # Step 1: 可选鉴权（联调可通过配置关闭）。
-    if IMAGE_REQUIRE_AUTH:
-        token = _extract_token(authorization)
-        if not token:
-            raise HTTPException(status_code=401, detail="缺少认证信息")
-
-        session_data = await crud_auth.verify_session_token(token, refresh_ttl=True)
-        if not session_data:
-            raise HTTPException(status_code=401, detail="登录状态已失效，请重新登录")
-
-    # Step 2: 调用算法服务获取生成结果。
+    # Step 1: 调用算法服务获取生成结果。
     payload = body.model_dump()
     started = perf_counter()
     try:
         algo_response = await algo_client.generate_watermarked_image(payload)
     except AlgoServiceError as exc:
+        await log_operation(db, user, "embed", "image", request, "fail", {"error": exc.message})
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
 
     # Step 3: 解析算法服务返回的两张图片（原图 + 水印图）。
@@ -137,7 +102,27 @@ async def generate_watermarked_image(
     algo_elapsed_ms = int(algo_response.get("elapsed_ms") or 0)
     elapsed_ms = max(local_elapsed_ms, algo_elapsed_ms)
 
-    # Step 6: 直出业务数据返回给前端。
+    # Step 6: 写入历史记录。
+    record = WmTaskRecord(
+        user_id=user["id"],
+        username=user["username"],
+        media_type="image",
+        operation_type="embed",
+        watermark_bits=body.watermark_bits,
+        prompt=body.prompt,
+        model=body.model,
+        original_file_url=orig_url,
+        watermarked_file_url=wm_url,
+        download_url=wm_url,
+        elapsed_ms=elapsed_ms,
+        status="success",
+        file_id=image_id,
+    )
+    db.add(record)
+    await db.commit()
+    await log_operation(db, user, "embed", "image", request, "success", {"watermark": body.watermark_bits})
+
+    # Step 7: 直出业务数据返回给前端。
     return {
         "image_id": image_id,
         "original_image_url": orig_url,
@@ -158,21 +143,12 @@ async def generate_watermarked_image(
 )
 async def extract_watermark(
     image_file: UploadFile = File(...),
-    authorization: Optional[str] = Header(default=None),
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """接收用户上传的图片，提取其中嵌入的 32 位水印。"""
 
-    # Step 1: 可选鉴权。
-    if IMAGE_REQUIRE_AUTH:
-        token = _extract_token(authorization)
-        if not token:
-            raise HTTPException(status_code=401, detail="缺少认证信息")
-
-        session_data = await crud_auth.verify_session_token(token, refresh_ttl=True)
-        if not session_data:
-            raise HTTPException(status_code=401, detail="登录状态已失效，请重新登录")
-
-    # Step 2: 读取并校验用户上传的文件。
+    # Step 1: 读取并校验用户上传的文件。
     if not image_file.filename:
         raise HTTPException(status_code=400, detail="请上传有效的图像文件")
 
@@ -220,7 +196,24 @@ async def extract_watermark(
     algo_elapsed_ms = int(algo_response.get("elapsed_ms") or 0)
     elapsed_ms = max(local_elapsed_ms, algo_elapsed_ms)
 
-    # Step 6: 直出给前端需要的结果数据。
+    # Step 6: 写入历史记录。
+    record = WmTaskRecord(
+        user_id=user["id"],
+        username=user["username"],
+        media_type="image",
+        operation_type="extract",
+        source_file_name=image_file.filename,
+        source_file_size=len(file_bytes),
+        extracted_bits=watermark_bits,
+        elapsed_ms=elapsed_ms,
+        status="success",
+        file_id=file_id,
+    )
+    db.add(record)
+    await db.commit()
+    await log_operation(db, user, "extract", "image", request, "success", {"watermark": watermark_bits})
+
+    # Step 7: 直出给前端需要的结果数据。
     return {
         "file_id": file_id,
         "file_name": image_file.filename,

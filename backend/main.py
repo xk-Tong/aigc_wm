@@ -4,11 +4,23 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from config.db_conf import async_engine
 from config.service_conf import BIZ_GS_STORAGE_ROOT, BIZ_IMAGE_STORAGE_ROOT, BIZ_MESH_STORAGE_ROOT, BIZ_POINTCLOUD_STORAGE_ROOT
-from routers import auth, gs, image, mesh, pointcloud
+from models.auth import Base
+from routers import auth, gs, image, log, mesh, pointcloud, record
+
+# 引入模型模块确保 create_all 能发现所有表
+import models.record  # noqa: F401
+import models.operation_log  # noqa: F401
 
 # 创建 FastAPI 应用并挂载业务路由。
 app = FastAPI()
+
+
+@app.on_event("startup")
+async def startup():
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
 
 @app.middleware("http")
@@ -23,6 +35,8 @@ app.include_router(image.router)
 app.include_router(pointcloud.router)
 app.include_router(mesh.router)
 app.include_router(gs.router)
+app.include_router(record.router)
+app.include_router(log.router)
 
 Path(BIZ_IMAGE_STORAGE_ROOT).mkdir(parents=True, exist_ok=True)
 app.mount("/storage", StaticFiles(directory=BIZ_IMAGE_STORAGE_ROOT), name="storage")

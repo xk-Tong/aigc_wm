@@ -74,17 +74,18 @@
               <el-icon><Folder /></el-icon>
               <span>数据管理</span>
             </template>
-            <el-menu-item index="/data/registry">水印注册库</el-menu-item>
-            <el-menu-item index="/data/logs">操作日志</el-menu-item>
+            <el-menu-item index="/data/history">我的历史</el-menu-item>
+            <el-menu-item v-if="isAdmin" index="/data/registry">水印注册库</el-menu-item>
+            <el-menu-item v-if="isAdmin" index="/data/logs">操作日志</el-menu-item>
           </el-sub-menu>
 
-          <el-sub-menu index="/system">
+          <el-sub-menu v-if="isAdmin" index="/system">
             <template #title>
               <el-icon><Setting /></el-icon>
               <span>系统管理</span>
             </template>
             <el-menu-item index="/system/users">用户管理</el-menu-item>
-            <el-menu-item index="/system/config">系统配置</el-menu-item>
+            <el-menu-item v-if="isSuperAdmin" index="/system/config">系统配置</el-menu-item>
           </el-sub-menu>
         </el-menu>
       </div>
@@ -93,11 +94,11 @@
       <div class="p-4 mt-auto border-t border-gray-50">
         <div class="flex items-center gap-3 p-3 rounded-2xl bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer" @click="handleLogout">
           <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-lg">
-            A
+            {{ userDisplayName.charAt(0).toUpperCase() }}
           </div>
           <div class="flex-1 overflow-hidden">
-            <p class="text-sm font-bold text-gray-800 truncate">Admin</p>
-            <p class="text-xs text-gray-500 truncate">普通用户</p>
+            <p class="text-sm font-bold text-gray-800 truncate">{{ userDisplayName }}</p>
+            <p class="text-xs text-gray-500 truncate">{{ roleDisplayName }}</p>
           </div>
           <el-icon class="text-gray-400 hover:text-red-500 transition-colors"><SwitchButton /></el-icon>
         </div>
@@ -116,11 +117,25 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import request from '../utils/request'
 
 const router = useRouter()
+
+const user = computed(() => {
+  try { return JSON.parse(localStorage.getItem('user')) || {} } catch { return {} }
+})
+
+const userDisplayName = computed(() => user.value.username || '用户')
+const userRole = computed(() => user.value.role || 'USER')
+const roleDisplayName = computed(() => {
+  const map = { USER: '普通用户', ADMIN: '管理员', SUPER_ADMIN: '超级管理员' }
+  return map[userRole.value] || '普通用户'
+})
+const isAdmin = computed(() => ['ADMIN', 'SUPER_ADMIN'].includes(userRole.value))
+const isSuperAdmin = computed(() => userRole.value === 'SUPER_ADMIN')
 
 const handleLogout = async () => {
   try {

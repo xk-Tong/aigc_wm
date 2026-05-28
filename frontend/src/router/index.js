@@ -81,28 +81,34 @@ const router = createRouter({
           meta: { title: '溯源验真' }
         },
         {
+          path: 'data/history',
+          name: 'data-history',
+          component: () => import('../views/History.vue'),
+          meta: { title: '我的历史' }
+        },
+        {
           path: 'data/registry',
           name: 'data-registry',
-          component: () => import('../views/Placeholder.vue'),
-          meta: { title: '水印注册库' }
+          component: () => import('../views/WatermarkRegistry.vue'),
+          meta: { title: '水印注册库', roles: ['ADMIN', 'SUPER_ADMIN'] }
         },
         {
           path: 'data/logs',
           name: 'data-logs',
-          component: () => import('../views/Placeholder.vue'),
-          meta: { title: '操作日志' }
+          component: () => import('../views/OperationLog.vue'),
+          meta: { title: '操作日志', roles: ['ADMIN', 'SUPER_ADMIN'] }
         },
         {
           path: 'system/users',
           name: 'system-users',
           component: () => import('../views/Placeholder.vue'),
-          meta: { title: '用户管理' }
+          meta: { title: '用户管理', roles: ['ADMIN', 'SUPER_ADMIN'] }
         },
         {
           path: 'system/config',
           name: 'system-config',
           component: () => import('../views/Placeholder.vue'),
-          meta: { title: '系统配置' }
+          meta: { title: '系统配置', roles: ['SUPER_ADMIN'] }
         }
       ]
     }
@@ -128,6 +134,10 @@ router.beforeEach(async (to) => {
   try {
     const response = await request.post('/api/v1/auth/verify-token')
     if (response?.data?.data?.valid) {
+      const userRole = response.data.data.user?.role || 'USER'
+      if (to.meta.roles && !to.meta.roles.includes(userRole)) {
+        return '/dashboard'
+      }
       return true
     }
   } catch (error) {

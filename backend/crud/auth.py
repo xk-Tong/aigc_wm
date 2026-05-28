@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 import json
 from typing import Optional
 
-from sqlalchemy import select, or_
+from sqlalchemy import func, select, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -204,10 +204,89 @@ def get_user_info(user: auth.User) -> UserInfo:
     return UserInfo.model_validate(user)
 
 
+async def update_user_role(db: AsyncSession, user_id: int, new_role: str) -> auth.User | None:
+    """修改用户角色"""
+    result = await db.execute(select(auth.User).where(auth.User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        return None
+    user.role = new_role
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+async def update_user_status(db: AsyncSession, user_id: int, status: int) -> auth.User | None:
+    """启用/禁用用户 (status: 1=正常, 0=禁用)"""
+    result = await db.execute(select(auth.User).where(auth.User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        return None
+    user.status = status
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+async def reset_user_password(db: AsyncSession, user_id: int, new_password: str) -> auth.User | None:
+    """重置用户密码"""
+    result = await db.execute(select(auth.User).where(auth.User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        return None
+    user.password_hash = get_password_hash(new_password)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+async def list_users(
+    db: AsyncSession,
+    page: int = 1,
+    size: int = 20,
+    keyword: str | None = None,
+    role_filter: str | None = None,
+    status_filter: int | None = None,
+) -> tuple[list[auth.User], int]:
+    """分页查询用户列表"""
+    query = select(auth.User)
+    count_query = select(auth.User)
+
+    # 关键字搜索（用户名或邮箱）
+    if keyword:
+        keyword_filter = or_(auth.User.username.contains(keyword), auth.User.email.contains(keyword))
+        query = query.where(keyword_filter)
+        count_query = count_query.where(keyword_filter)
+
+    # 角色筛选
+    if role_filter:
+        query = query.where(auth.User.role == role_filter)
+        count_query = count_query.where(auth.User.role == role_filter)
+
+    # 状态筛选
+    if status_filter is not None:
+        query = query.where(auth.User.status == status_filter)
+        count_query = count_query.where(auth.User.status == status_filter)
+
+    # 统计总数
+    count_result = await db.execute(
+        select(func.count()).select_from(count_query.subquery())
+    )
+    total = count_result.scalar() or 0
+
+    # 分页
+    offset = (page - 1) * size
+    query = query.order_by(auth.User.id.desc()).offset(offset).limit(size)
+    result = await db.execute(query)
+    users = result.scalars().all()
+
+    return list(users), total
+
+
 def get_current_timestamp() -> str:
     """
     获取当前UTC时间戳
-    
+
     Returns:
         str: 格式化的时间戳字符串
     """

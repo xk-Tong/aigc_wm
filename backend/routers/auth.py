@@ -1,12 +1,13 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.db_conf import get_db
 from crud import auth as crud_auth
 from schemas.auth import ApiResponse, UserRegister, UserLogin
+from services.audit_log import log_operation
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -26,7 +27,7 @@ def _extract_token(authorization: Optional[str]) -> Optional[str]:
 
 
 @router.post("/register", response_model=ApiResponse)
-async def register(user_in: UserRegister, db: AsyncSession = Depends(get_db)):
+async def register(user_in: UserRegister, request: Request, db: AsyncSession = Depends(get_db)):
     existing_user = await crud_auth.get_user_by_username_or_email(
         db, user_in.username, user_in.email
     )
@@ -42,6 +43,8 @@ async def register(user_in: UserRegister, db: AsyncSession = Depends(get_db)):
     except IntegrityError:
         raise HTTPException(status_code=400, detail="用户名或邮箱已被注册")
 
+    await log_operation(db, {"id": new_user.id, "username": new_user.username}, "register", None, request, "success")
+
     return {
         "code": 200,
         "message": "success",
@@ -55,13 +58,15 @@ async def register(user_in: UserRegister, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/login", response_model=ApiResponse)
-async def login(user_in: UserLogin, db: AsyncSession = Depends(get_db)):
+async def login(user_in: UserLogin, request: Request, db: AsyncSession = Depends(get_db)):
     user = await crud_auth.authenticate_user(db, user_in.username, user_in.password)
 
     if not user:
+        await log_operation(db, None, "login", None, request, "fail", {"username": user_in.username})
         raise HTTPException(status_code=401, detail="用户名或密码错误")
 
     if user.status == 0:
+        await log_operation(db, {"id": user.id, "username": user.username}, "login", None, request, "fail", {"reason": "account_disabled"})
         raise HTTPException(status_code=403, detail="该账号已被禁用")
 
     try:
@@ -70,6 +75,7 @@ async def login(user_in: UserLogin, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=503, detail="登录服务暂不可用，请稍后再试")
 
     user_info = crud_auth.get_user_info(user)
+    await log_operation(db, {"id": user.id, "username": user.username}, "login", None, request, "success")
 
     return {
         "code": 200,
@@ -114,12 +120,19 @@ async def verify_token(authorization: Optional[str] = Header(default=None)):
 
 
 @router.post("/logout", response_model=ApiResponse)
-async def logout(authorization: Optional[str] = Header(default=None)):
+async def logout(authorization: Optional[str] = Header(default=None), request: Request = None, db: AsyncSession = Depends(get_db)):
     token = _extract_token(authorization)
+
+    session_data = None
+    if token:
+        session_data = await crud_auth.verify_session_token(token, refresh_ttl=False)
 
     deleted = False
     if token:
         deleted = await crud_auth.delete_session_token(token)
+
+    if session_data:
+        await log_operation(db, session_data, "logout", None, request, "success")
 
     return {
         "code": 200,
