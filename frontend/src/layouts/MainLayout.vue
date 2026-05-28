@@ -91,8 +91,8 @@
       </div>
 
       <!-- 底部用户信息 -->
-      <div class="p-4 mt-auto border-t border-gray-50">
-        <div class="flex items-center gap-3 p-3 rounded-2xl bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer" @click="handleLogout">
+      <div class="p-4 mt-auto border-t border-gray-50 space-y-2">
+        <div class="flex items-center gap-3 p-3 rounded-2xl bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer" @click="$router.push('/profile')">
           <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-lg">
             {{ userDisplayName.charAt(0).toUpperCase() }}
           </div>
@@ -100,8 +100,11 @@
             <p class="text-sm font-bold text-gray-800 truncate">{{ userDisplayName }}</p>
             <p class="text-xs text-gray-500 truncate">{{ roleDisplayName }}</p>
           </div>
-          <el-icon class="text-gray-400 hover:text-red-500 transition-colors"><SwitchButton /></el-icon>
+          <el-icon class="text-gray-400"><ArrowRight /></el-icon>
         </div>
+        <el-button class="w-full !rounded-xl" size="small" @click="handleLogout">
+          <el-icon class="mr-1"><SwitchButton /></el-icon>退出登录
+        </el-button>
       </div>
     </aside>
     

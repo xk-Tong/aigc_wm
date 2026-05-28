@@ -60,6 +60,11 @@ async def get_user_by_username(db: AsyncSession, username: str) -> Optional[auth
     return result.scalar_one_or_none()
 
 
+async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[auth.User]:
+    result = await db.execute(select(auth.User).where(auth.User.id == user_id))
+    return result.scalar_one_or_none()
+
+
 async def create_user(db: AsyncSession, user_in: UserRegister) -> auth.User:
     """
     创建新用户

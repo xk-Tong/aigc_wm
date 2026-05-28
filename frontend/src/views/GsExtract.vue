@@ -125,12 +125,45 @@
         </div>
       </div>
     </div>
+
+    <!-- 近期记录面板 -->
+    <div class="mt-8 bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
+      <el-collapse v-model="recentPanelActive">
+        <el-collapse-item title="近期记录" name="recent">
+          <div v-if="recentRecords.length === 0" class="text-center text-gray-400 py-4">暂无记录</div>
+          <el-table v-else :data="recentRecords" size="small" stripe>
+            <el-table-column prop="id" label="ID" width="60" />
+            <el-table-column prop="extracted_bits" label="提取水印" width="140">
+              <template #default="{ row }"><span class="font-mono text-xs">{{ row.extracted_bits || '-' }}</span></template>
+            </el-table-column>
+            <el-table-column prop="source_file_name" label="文件名" min-width="140">
+              <template #default="{ row }"><span class="text-xs">{{ row.source_file_name || '-' }}</span></template>
+            </el-table-column>
+            <el-table-column prop="status" label="状态" width="70">
+              <template #default="{ row }">
+                <el-tag size="small" :type="row.status === 'success' ? 'success' : 'danger'">{{ row.status === 'success' ? '成功' : '失败' }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="elapsed_ms" label="耗时" width="90">
+              <template #default="{ row }">{{ row.elapsed_ms ? `${(row.elapsed_ms / 1000).toFixed(1)}s` : '-' }}</template>
+            </el-table-column>
+            <el-table-column prop="created_at" label="时间" width="160">
+              <template #default="{ row }">{{ formatRecentTime(row.created_at) }}</template>
+            </el-table-column>
+          </el-table>
+          <div class="flex justify-end mt-3">
+            <el-button link type="primary" @click="$router.push('/data/history')">查看全部 <el-icon class="ml-1"><ArrowRight /></el-icon></el-button>
+          </div>
+        </el-collapse-item>
+      </el-collapse>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onBeforeUnmount, shallowRef, nextTick } from 'vue'
+import { ref, computed, onBeforeUnmount, onMounted, shallowRef, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
+import { ArrowRight } from '@element-plus/icons-vue'
 import request from '../utils/request'
 
 // 动态加载 gsplat 库，避免顶层 import 阻塞路由切换
@@ -277,6 +310,26 @@ const copyWatermark = async () => {
   ElMessage.success('水印内容已复制')
 }
 
+// 近期记录
+const recentPanelActive = ref([])
+const recentRecords = ref([])
+
+const fetchRecentRecords = async () => {
+  try {
+    const res = await request.get('/api/v1/records', {
+      params: { media_type: 'gs', operation_type: 'extract', size: 5, page: 1 }
+    })
+    if (res?.data?.code === 200) {
+      recentRecords.value = res.data.data.items
+    }
+  } catch { /* ignore */ }
+}
+
+const formatRecentTime = (t) => {
+  if (!t) return '-'
+  return new Date(t).toLocaleString('zh-CN')
+}
+
 const startExtraction = async () => {
   if (!uploadedFile.value) return
 
@@ -307,6 +360,7 @@ const startExtraction = async () => {
       timeTaken: ((payload.elapsed_ms || 0) / 1000).toFixed(2),
     }
     ElMessage.success('水印提取成功！')
+    fetchRecentRecords()
   } catch (err) {
     isExtracting.value = false
     const message = err?.response?.data?.detail || err?.message || '3DGS 数据可能已被破坏或未包含有效的水印特征，提取失败。'
@@ -314,6 +368,8 @@ const startExtraction = async () => {
     ElMessage.error(message)
   }
 }
+
+onMounted(() => fetchRecentRecords())
 
 // ==================== 生命周期清理 ====================
 

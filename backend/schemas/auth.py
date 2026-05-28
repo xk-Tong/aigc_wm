@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Any
+from typing import Any, Optional
+from datetime import datetime
 
 class ApiResponse(BaseModel):
     code: int
@@ -24,3 +25,27 @@ class UserInfo(BaseModel):
 
     class Config:
         from_attributes = True
+
+class UserManagementItem(BaseModel):
+    id: int
+    username: str
+    email: str
+    role: str
+    status: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str = Field(min_length=8)
+    new_password: str = Field(min_length=8)
+
+class ResetPasswordRequest(BaseModel):
+    new_password: str = Field(min_length=8)
+
+class UpdateRoleRequest(BaseModel):
+    role: str = Field(pattern="^(USER|ADMIN|SUPER_ADMIN)$")
+
+class UpdateStatusRequest(BaseModel):
+    status: int = Field(ge=0, le=1)

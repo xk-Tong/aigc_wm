@@ -99,9 +99,15 @@ const router = createRouter({
           meta: { title: '操作日志', roles: ['ADMIN', 'SUPER_ADMIN'] }
         },
         {
+          path: 'profile',
+          name: 'profile',
+          component: () => import('../views/UserProfile.vue'),
+          meta: { title: '个人中心' }
+        },
+        {
           path: 'system/users',
           name: 'system-users',
-          component: () => import('../views/Placeholder.vue'),
+          component: () => import('../views/UserManagement.vue'),
           meta: { title: '用户管理', roles: ['ADMIN', 'SUPER_ADMIN'] }
         },
         {
