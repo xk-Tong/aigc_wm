@@ -112,6 +112,7 @@ async def generate_watermarked_pointcloud(
     response_model=ExtractPointcloudWatermarkResponse,
 )
 async def extract_watermark(
+    request: Request,
     pointcloud_file: UploadFile = File(...),
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

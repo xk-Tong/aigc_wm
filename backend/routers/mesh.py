@@ -112,6 +112,7 @@ async def generate_watermarked_mesh(
     response_model=ExtractMeshWatermarkResponse,
 )
 async def extract_watermark(
+    request: Request,
     mesh_file: UploadFile = File(...),
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

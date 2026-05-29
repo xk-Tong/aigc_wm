@@ -142,6 +142,7 @@ async def generate_watermarked_image(
     response_model=ExtractWatermarkResponse,
 )
 async def extract_watermark(
+    request: Request,
     image_file: UploadFile = File(...),
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

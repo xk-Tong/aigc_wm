@@ -105,6 +105,7 @@ async def generate_watermarked_gs(
     response_model=ExtractGSWatermarkResponse,
 )
 async def extract_watermark(
+    request: Request,
     gs_file: UploadFile = File(...),
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

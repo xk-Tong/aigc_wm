@@ -193,7 +193,7 @@ import { ElMessage } from 'element-plus'
 import { ArrowRight } from '@element-plus/icons-vue'
 import request from '../utils/request'
 import * as THREE from 'three'
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { TrackballControls } from 'three/examples/jsm/controls/TrackballControls.js'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
@@ -249,8 +249,13 @@ const initThree = () => {
   renderer.value.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
   canvasContainer.value.appendChild(renderer.value.domElement)
 
-  controls.value = new OrbitControls(camera.value, renderer.value.domElement)
-  controls.value.enableDamping = true
+  controls.value = new TrackballControls(camera.value, renderer.value.domElement)
+  controls.value.rotateSpeed = 3.0
+  controls.value.zoomSpeed = 1.2
+  controls.value.panSpeed = 0.8
+  controls.value.dynamicDampingFactor = 0.15
+  controls.value.minDistance = 0.5
+  controls.value.maxDistance = 50
 
   scene.value.add(new THREE.AmbientLight(0xffffff, 0.6))
   const dirLight = new THREE.DirectionalLight(0xffffff, 0.8)
@@ -274,6 +279,7 @@ const onWindowResize = () => {
   camera.value.aspect = canvasContainer.value.clientWidth / canvasContainer.value.clientHeight
   camera.value.updateProjectionMatrix()
   renderer.value.setSize(canvasContainer.value.clientWidth, canvasContainer.value.clientHeight)
+  if (controls.value) controls.value.handleResize()
 }
 
 // ==================== 3D 对象辅助函数 ====================
@@ -372,7 +378,9 @@ const loadMeshFromUrl = (url, fileFormat) => {
 const resetView = () => {
   if (camera.value && controls.value) {
     camera.value.position.set(0, 0, 6)
+    camera.value.up.set(0, 1, 0)
     controls.value.target.set(0, 0, 0)
+    controls.value.reset()
   }
 }
 
