@@ -179,42 +179,20 @@
     </div>
 
     <!-- 近期记录面板 -->
-    <div class="mt-8 bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-      <el-collapse v-model="recentPanelActive">
-        <el-collapse-item title="近期记录" name="recent">
-          <div v-if="recentRecords.length === 0" class="text-center text-gray-400 py-4">暂无记录</div>
-          <el-table v-else :data="recentRecords" size="small" stripe>
-            <el-table-column prop="id" label="ID" width="60" />
-            <el-table-column prop="watermark_bits" label="水印值" width="140">
-              <template #default="{ row }"><span class="font-mono text-xs">{{ row.watermark_bits || '-' }}</span></template>
-            </el-table-column>
-            <el-table-column prop="model" label="模型" width="80" />
-            <el-table-column prop="status" label="状态" width="70">
-              <template #default="{ row }">
-                <el-tag size="small" :type="row.status === 'success' ? 'success' : 'danger'">{{ row.status === 'success' ? '成功' : '失败' }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="elapsed_ms" label="耗时" width="90">
-              <template #default="{ row }">{{ row.elapsed_ms ? `${(row.elapsed_ms / 1000).toFixed(1)}s` : '-' }}</template>
-            </el-table-column>
-            <el-table-column prop="created_at" label="时间" width="160">
-              <template #default="{ row }">{{ formatRecentTime(row.created_at) }}</template>
-            </el-table-column>
-          </el-table>
-          <div class="flex justify-end mt-3">
-            <el-button link type="primary" @click="$router.push('/data/history')">查看全部 <el-icon class="ml-1"><ArrowRight /></el-icon></el-button>
-          </div>
-        </el-collapse-item>
-      </el-collapse>
-    </div>
+    <RecentRecords
+      :records="recentRecords"
+      operation-type="embed"
+      theme-color="indigo"
+      subtitle="最近 5 条点云生成记录"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onBeforeUnmount, onMounted, shallowRef } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ArrowRight } from '@element-plus/icons-vue'
 import request from '../utils/request'
+import RecentRecords from '../components/RecentRecords.vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js'
@@ -290,7 +268,6 @@ const copyWatermark = async () => {
 }
 
 // 近期记录
-const recentPanelActive = ref([])
 const recentRecords = ref([])
 
 const fetchRecentRecords = async () => {
@@ -302,11 +279,6 @@ const fetchRecentRecords = async () => {
       recentRecords.value = res.data.data.items
     }
   } catch { /* ignore */ }
-}
-
-const formatRecentTime = (t) => {
-  if (!t) return '-'
-  return new Date(t).toLocaleString('zh-CN')
 }
 
 const handleDownload = () => {
