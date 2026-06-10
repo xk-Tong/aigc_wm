@@ -142,11 +142,32 @@ import { ref, computed, onBeforeUnmount, onMounted, shallowRef, nextTick } from 
 import { ElMessage } from 'element-plus'
 import request from '../utils/request'
 import RecentRecords from '../components/RecentRecords.vue'
-import * as THREE from 'three'
-import { TrackballControls } from 'three/examples/jsm/controls/TrackballControls.js'
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
-import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+
+// ==================== Three.js 动态加载（避免顶层 import 阻塞路由切换） ====================
+
+let _THREE = null
+let _TrackballControls = null
+let _OBJLoader = null
+let _STLLoader = null
+let _GLTFLoader = null
+
+const ensureThreeLoaded = async () => {
+  if (!_THREE) {
+    const [THREE, controlsMod, objMod, stlMod, gltfMod] = await Promise.all([
+      import('three'),
+      import('three/examples/jsm/controls/TrackballControls.js'),
+      import('three/examples/jsm/loaders/OBJLoader.js'),
+      import('three/examples/jsm/loaders/STLLoader.js'),
+      import('three/examples/jsm/loaders/GLTFLoader.js'),
+    ])
+    _THREE = THREE
+    _TrackballControls = controlsMod.TrackballControls
+    _OBJLoader = objMod.OBJLoader
+    _STLLoader = stlMod.STLLoader
+    _GLTFLoader = gltfMod.GLTFLoader
+  }
+  return { THREE: _THREE, TrackballControls: _TrackballControls, OBJLoader: _OBJLoader, STLLoader: _STLLoader, GLTFLoader: _GLTFLoader }
+}
 
 // ==================== 响应式状态 ====================
 
@@ -177,7 +198,7 @@ const resultCardClass = computed(() => {
 
 // ==================== 文件处理 ====================
 
-const handleFileChange = (uploadFile) => {
+const handleFileChange = async (uploadFile) => {
   const file = uploadFile.raw
   if (!file) return
 
@@ -197,10 +218,9 @@ const handleFileChange = (uploadFile) => {
 
   result.value = null
 
-  nextTick(() => {
-    initThree()
-    loadUserMesh(file)
-  })
+  await nextTick()
+  await initThree()
+  loadUserMesh(file)
 }
 
 const removeFile = () => {
@@ -277,10 +297,28 @@ const calculateFaces = (geometry) => {
   return 0
 }
 
-const initThree = () => {
+const initThree = async () => {
   if (!canvasContainer.value) return
 
-  disposeThree()
+  const { THREE, TrackballControls } = await ensureThreeLoaded()
+
+  // 先同步停掉旧的渲染循环，避免 CPU/GPU 叠加，并清理旧 DOM
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId)
+    animationFrameId = null
+  }
+  window.removeEventListener('resize', onWindowResize)
+  if (controls.value) {
+    controls.value.dispose()
+    controls.value = null
+  }
+  if (renderer.value) {
+    renderer.value.dispose()
+    if (canvasContainer.value) canvasContainer.value.innerHTML = ''
+    renderer.value = null
+  }
+  scene.value = null
+  camera.value = null
 
   scene.value = new THREE.Scene()
   scene.value.background = new THREE.Color(0x1e1e1e)
@@ -347,7 +385,9 @@ const disposeObject3D = (object) => {
 }
 
 const processAndAddObject = (object) => {
-  if (!scene.value) return
+  if (!scene.value || !_THREE) return
+
+  const THREE = _THREE
 
   if (meshObject.value && scene.value) {
     scene.value.remove(meshObject.value)
@@ -369,6 +409,9 @@ const processAndAddObject = (object) => {
 }
 
 const loadUserMesh = (file) => {
+  if (!_THREE) return
+
+  const THREE = _THREE
   const loadToken = ++activeLoadToken
   const url = URL.createObjectURL(file)
   const ext = file.name.split('.').pop().toLowerCase()
@@ -383,7 +426,7 @@ const loadUserMesh = (file) => {
   const onDone = () => URL.revokeObjectURL(url)
 
   if (ext === 'obj') {
-    new OBJLoader().load(url, (group) => {
+    new _OBJLoader().load(url, (group) => {
       let totalFaces = 0
       group.traverse((child) => {
         if (child.isMesh) {
@@ -401,7 +444,7 @@ const loadUserMesh = (file) => {
       if (loadToken === activeLoadToken) ElMessage.error('OBJ 文件加载失败，请检查文件是否损坏')
     })
   } else if (ext === 'stl') {
-    new STLLoader().load(url, (geometry) => {
+    new _STLLoader().load(url, (geometry) => {
       if (loadToken === activeLoadToken) {
         fileInfo.value.facesCount = calculateFaces(geometry).toLocaleString()
         processAndAddObject(new THREE.Mesh(geometry, defaultMaterial))
@@ -412,7 +455,7 @@ const loadUserMesh = (file) => {
       if (loadToken === activeLoadToken) ElMessage.error('STL 文件加载失败，请检查文件是否损坏')
     })
   } else if (ext === 'gltf' || ext === 'glb') {
-    new GLTFLoader().load(url, (gltf) => {
+    new _GLTFLoader().load(url, (gltf) => {
       let totalFaces = 0
       gltf.scene.traverse((child) => {
         if (child.isMesh) {
@@ -447,8 +490,10 @@ const toggleWireframe = () => {
 
 const disposeThree = () => {
   activeLoadToken += 1
-  if (animationFrameId) cancelAnimationFrame(animationFrameId)
-  animationFrameId = null
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId)
+    animationFrameId = null
+  }
   window.removeEventListener('resize', onWindowResize)
 
   if (controls.value) {
@@ -462,15 +507,23 @@ const disposeThree = () => {
     meshObject.value = null
   }
 
-  if (renderer.value) {
-    renderer.value.dispose()
-    renderer.value.forceContextLoss?.()
-    if (canvasContainer.value) canvasContainer.value.innerHTML = ''
-    renderer.value = null
-  }
-
+  // GPU 资源释放延迟执行，不阻塞当前操作
+  const r = renderer.value
+  renderer.value = null
   scene.value = null
   camera.value = null
+  if (r) {
+    if (canvasContainer.value) canvasContainer.value.innerHTML = ''
+    const doCleanup = () => {
+      r.dispose()
+      r.forceContextLoss?.()
+    }
+    if (typeof requestIdleCallback !== 'undefined') {
+      requestIdleCallback(doCleanup, { timeout: 1000 })
+    } else {
+      setTimeout(doCleanup, 50)
+    }
+  }
 }
 
 onBeforeUnmount(() => disposeThree())

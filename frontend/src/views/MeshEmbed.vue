@@ -99,9 +99,9 @@
               <el-icon class="text-5xl mb-2 opacity-50"><Box /></el-icon>
               <p>等待生成</p>
             </div>
-            <div v-else-if="isGenerating" class="absolute inset-0 flex flex-col items-center justify-center bg-[#f8fafc]/90 backdrop-blur-sm z-10">
+            <div v-else-if="isGenerating || isLoadingModel" class="absolute inset-0 flex flex-col items-center justify-center bg-[#f8fafc]/90 backdrop-blur-sm z-10">
               <el-icon class="text-4xl text-teal-500 mb-3 animate-spin"><Loading /></el-icon>
-              <p class="text-sm font-medium text-teal-600">正在构建 3D 网格并嵌入水印...</p>
+              <p class="text-sm font-medium text-teal-600">{{ isLoadingModel ? '正在加载 3D 模型文件...' : '正在构建 3D 网格并嵌入水印...' }}</p>
             </div>
           </div>
         </div>
@@ -170,11 +170,32 @@ import { ref, computed, onBeforeUnmount, onMounted, shallowRef } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '../utils/request'
 import RecentRecords from '../components/RecentRecords.vue'
-import * as THREE from 'three'
-import { TrackballControls } from 'three/examples/jsm/controls/TrackballControls.js'
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
-import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+
+// ==================== Three.js 动态加载（避免顶层 import 阻塞路由切换） ====================
+
+let _THREE = null
+let _TrackballControls = null
+let _OBJLoader = null
+let _STLLoader = null
+let _GLTFLoader = null
+
+const ensureThreeLoaded = async () => {
+  if (!_THREE) {
+    const [THREE, controlsMod, objMod, stlMod, gltfMod] = await Promise.all([
+      import('three'),
+      import('three/examples/jsm/controls/TrackballControls.js'),
+      import('three/examples/jsm/loaders/OBJLoader.js'),
+      import('three/examples/jsm/loaders/STLLoader.js'),
+      import('three/examples/jsm/loaders/GLTFLoader.js'),
+    ])
+    _THREE = THREE
+    _TrackballControls = controlsMod.TrackballControls
+    _OBJLoader = objMod.OBJLoader
+    _STLLoader = stlMod.STLLoader
+    _GLTFLoader = gltfMod.GLTFLoader
+  }
+  return { THREE: _THREE, TrackballControls: _TrackballControls, OBJLoader: _OBJLoader, STLLoader: _STLLoader, GLTFLoader: _GLTFLoader }
+}
 
 // ==================== 表单数据 ====================
 
@@ -199,6 +220,7 @@ const formRules = {
 }
 
 const isGenerating = ref(false)
+const isLoadingModel = ref(false)
 const result = ref(null)
 
 // ==================== Three.js ====================
@@ -211,8 +233,20 @@ const controls = shallowRef(null)
 const meshObject = shallowRef(null)
 let animationFrameId = null
 
-const initThree = () => {
+const initThree = async () => {
   if (!canvasContainer.value) return
+
+  const { THREE, TrackballControls } = await ensureThreeLoaded()
+
+  // 先清理旧实例
+  if (renderer.value) {
+    renderer.value.dispose()
+    renderer.value = null
+  }
+  if (controls.value) {
+    controls.value.dispose()
+    controls.value = null
+  }
 
   scene.value = new THREE.Scene()
   scene.value.background = new THREE.Color(0x1e1e1e)
@@ -287,7 +321,9 @@ const calculateFaces = (geometry) => {
 }
 
 const processAndAddObject = (object) => {
-  if (!scene.value) return
+  if (!scene.value || !_THREE) return
+
+  const THREE = _THREE
 
   if (meshObject.value) {
     scene.value.remove(meshObject.value)
@@ -312,43 +348,6 @@ const processAndAddObject = (object) => {
     if (child.isMesh) totalFaces += calculateFaces(child.geometry)
   })
   if (result.value) result.value.facesCount = Math.round(totalFaces)
-}
-
-const loadMeshFromUrl = (url, fileFormat) => {
-  if (!scene.value) return
-
-  const defaultMaterial = new THREE.MeshStandardMaterial({
-    color: 0x0d9488,
-    roughness: 0.4,
-    metalness: 0.1,
-    side: THREE.DoubleSide,
-  })
-
-  const onError = () => ElMessage.error('模型加载失败')
-
-  if (fileFormat === 'stl') {
-    new STLLoader().load(url, (geometry) => {
-      const mesh = new THREE.Mesh(geometry, defaultMaterial)
-      processAndAddObject(mesh)
-    }, undefined, onError)
-  } else if (fileFormat === 'gltf' || fileFormat === 'glb') {
-    new GLTFLoader().load(url, (gltf) => {
-      gltf.scene.traverse((child) => {
-        if (child.isMesh && (!child.material || child.material === undefined)) {
-          child.material = defaultMaterial
-        }
-      })
-      processAndAddObject(gltf.scene)
-    }, undefined, onError)
-  } else {
-    // 默认 obj
-    new OBJLoader().load(url, (group) => {
-      group.traverse((child) => {
-        if (child.isMesh) child.material = defaultMaterial
-      })
-      processAndAddObject(group)
-    }, undefined, onError)
-  }
 }
 
 // ==================== 交互操作 ====================
@@ -439,6 +438,7 @@ const handleGenerate = async () => {
   }
 
   isGenerating.value = true
+  isLoadingModel.value = false
   result.value = null
 
   try {
@@ -452,10 +452,7 @@ const handleGenerate = async () => {
     const payload = response?.data || {}
     isGenerating.value = false
 
-    if (!scene.value) initThree()
-    loadMeshFromUrl(payload.mesh_url, payload.file_format || 'obj')
-    resetView()
-
+    // 先写入 result（不含 facesCount），processAndAddObject 回调会补充面片数
     const generatedAt = payload.generated_at ? new Date(payload.generated_at) : new Date()
     result.value = {
       facesCount: 0,
@@ -465,10 +462,62 @@ const handleGenerate = async () => {
       downloadUrl: payload.download_url || payload.mesh_url,
     }
 
+    isLoadingModel.value = true
+
+    // 异步加载 Three.js 并初始化场景（不阻塞 UI 响应）
+    if (!scene.value) await initThree()
+
+    // 模型文件异步下载 + 解析
+    await new Promise((resolve, reject) => {
+      const THREE = _THREE
+      if (!THREE || !scene.value) { isLoadingModel.value = false; resolve(); return }
+
+      const defaultMaterial = new THREE.MeshStandardMaterial({
+        color: 0x0d9488,
+        roughness: 0.4,
+        metalness: 0.1,
+        side: THREE.DoubleSide,
+      })
+
+      const onError = (err) => { isLoadingModel.value = false; reject(err) }
+      const onLoaded = (object) => {
+        processAndAddObject(object)
+        isLoadingModel.value = false
+        resetView()
+        resolve()
+      }
+
+      const fileFormat = payload.file_format || 'obj'
+      const url = payload.mesh_url
+
+      if (fileFormat === 'stl') {
+        new _STLLoader().load(url, (geometry) => {
+          onLoaded(new THREE.Mesh(geometry, defaultMaterial))
+        }, undefined, onError)
+      } else if (fileFormat === 'gltf' || fileFormat === 'glb') {
+        new _GLTFLoader().load(url, (gltf) => {
+          gltf.scene.traverse((child) => {
+            if (child.isMesh && (!child.material || child.material === undefined)) {
+              child.material = defaultMaterial
+            }
+          })
+          onLoaded(gltf.scene)
+        }, undefined, onError)
+      } else {
+        new _OBJLoader().load(url, (group) => {
+          group.traverse((child) => {
+            if (child.isMesh) child.material = defaultMaterial
+          })
+          onLoaded(group)
+        }, undefined, onError)
+      }
+    })
+
     ElMessage.success('网格模型生成并嵌入水印成功！')
     fetchRecentRecords()
   } catch (err) {
     isGenerating.value = false
+    isLoadingModel.value = false
     const message = err?.response?.data?.detail || err?.message || '网格模型生成失败，请稍后重试'
     ElMessage.error(message)
   }
@@ -480,16 +529,38 @@ onMounted(() => fetchRecentRecords())
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onWindowResize)
-  if (animationFrameId) cancelAnimationFrame(animationFrameId)
+  // 立即停止渲染循环，避免卸载后继续占用主线程
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId)
+    animationFrameId = null
+  }
+  // 同步清理场景对象（快速）
   if (meshObject.value) {
     if (scene.value) scene.value.remove(meshObject.value)
     disposeObject3D(meshObject.value)
+    meshObject.value = null
   }
-  if (renderer.value) {
-    renderer.value.dispose()
-    renderer.value.forceContextLoss?.()
+  if (controls.value) {
+    controls.value.dispose()
+    controls.value = null
   }
-  if (controls.value) controls.value.dispose()
+  // GPU 资源释放延迟到下一个空闲帧，不阻塞路由切换动画
+  const r = renderer.value
+  renderer.value = null
+  scene.value = null
+  camera.value = null
+  if (r) {
+    // 使用 requestIdleCallback 或 setTimeout 延迟执行耗时的 GPU 清理
+    const doCleanup = () => {
+      r.dispose()
+      r.forceContextLoss?.()
+    }
+    if (typeof requestIdleCallback !== 'undefined') {
+      requestIdleCallback(doCleanup, { timeout: 1000 })
+    } else {
+      setTimeout(doCleanup, 50)
+    }
+  }
 })
 </script>
 

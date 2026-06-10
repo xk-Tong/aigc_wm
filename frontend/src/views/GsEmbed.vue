@@ -100,9 +100,9 @@
               <el-icon class="text-5xl mb-2 opacity-50"><Histogram /></el-icon>
               <p>等待生成</p>
             </div>
-            <div v-else-if="isGenerating" class="absolute inset-0 flex flex-col items-center justify-center bg-[#f8fafc]/90 backdrop-blur-sm z-10">
+            <div v-else-if="isGenerating || isLoadingModel" class="absolute inset-0 flex flex-col items-center justify-center bg-[#f8fafc]/90 backdrop-blur-sm z-10">
               <el-icon class="text-4xl text-violet-500 mb-3 animate-spin"><Loading /></el-icon>
-              <p class="text-sm font-medium text-violet-600">正在构建 3DGS 场景并嵌入水印...</p>
+              <p class="text-sm font-medium text-violet-600">{{ isLoadingModel ? '正在加载 3DGS 模型文件...' : '正在构建 3DGS 场景并嵌入水印...' }}</p>
             </div>
             <!-- gsplat.js 独占的渲染容器，与 Vue 管理的 DOM 完全隔离 -->
             <div ref="gsContainer" class="absolute inset-0"></div>
@@ -206,6 +206,7 @@ const formRules = {
 }
 
 const isGenerating = ref(false)
+const isLoadingModel = ref(false)
 const result = ref(null)
 
 // ==================== Gaussian Splats 3D ====================
@@ -367,6 +368,7 @@ const handleGenerate = async () => {
   }
 
   isGenerating.value = true
+  isLoadingModel.value = false
   result.value = null
   await cleanupViewer()
 
@@ -380,10 +382,12 @@ const handleGenerate = async () => {
 
     const payload = response?.data || {}
     isGenerating.value = false
+    isLoadingModel.value = true
 
-  // 生成完成后立即加载结果文件做预览。
+    // 加载 3DGS 场景文件（异步，大文件可能耗时较长）
     await initViewer()
-    loadGsFromUrl(payload.gs_url)
+    await loadGsFromUrl(payload.gs_url)
+    isLoadingModel.value = false
 
     const generatedAt = payload.generated_at ? new Date(payload.generated_at) : new Date()
     result.value = {
@@ -400,6 +404,7 @@ const handleGenerate = async () => {
     fetchRecentRecords()
   } catch (err) {
     isGenerating.value = false
+    isLoadingModel.value = false
     const message = err?.response?.data?.detail || err?.message || '3DGS 模型生成失败，请稍后重试'
     ElMessage.error(message)
   }

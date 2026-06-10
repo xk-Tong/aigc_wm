@@ -111,7 +111,7 @@
     <!-- 主内容区 -->
     <main class="flex-1 overflow-y-auto rounded-3xl relative custom-scrollbar">
       <router-view v-slot="{ Component }">
-        <transition name="fade" mode="out-in">
+        <transition name="fade">
           <component :is="Component" />
         </transition>
       </router-view>
