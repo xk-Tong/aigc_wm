@@ -19,6 +19,7 @@ from schemas.mesh import (
 )
 from services.algo_client import AlgoServiceError, algo_client
 from services.audit_log import log_operation
+from utils.public_url import build_public_url
 
 router = APIRouter(prefix="/api/v1/mesh", tags=["mesh"])
 
@@ -72,7 +73,7 @@ async def generate_watermarked_mesh(
         f.write(mesh_bytes)
 
     relative_path = file_path.relative_to(Path(BIZ_MESH_STORAGE_ROOT)).as_posix()
-    mesh_url = str(request.url_for("storage_mesh", path=relative_path))
+    mesh_url = build_public_url(f"/storage_mesh/{relative_path}")
 
     local_elapsed_ms = int((perf_counter() - started) * 1000)
     elapsed_ms = max(local_elapsed_ms, algo_elapsed_ms)

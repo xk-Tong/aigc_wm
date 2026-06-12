@@ -185,6 +185,24 @@ const renderer = shallowRef(null)
 const controls = shallowRef(null)
 const meshObject = shallowRef(null)
 let animationFrameId = null
+
+const stopAnimation = () => {
+  stopAnimation()
+}
+
+const startAnimation = () => {
+  if (!animationFrameId && renderer.value && scene.value && camera.value) {
+    animate()
+  }
+}
+
+const onVisibilityChange = () => {
+  if (document.hidden) {
+    stopAnimation()
+  } else {
+    startAnimation()
+  }
+}
 let activeLoadToken = 0
 
 // ==================== 计算属性 ====================
@@ -303,10 +321,7 @@ const initThree = async () => {
   const { THREE, TrackballControls } = await ensureThreeLoaded()
 
   // 先同步停掉旧的渲染循环，避免 CPU/GPU 叠加，并清理旧 DOM
-  if (animationFrameId) {
-    cancelAnimationFrame(animationFrameId)
-    animationFrameId = null
-  }
+  stopAnimation()
   window.removeEventListener('resize', onWindowResize)
   if (controls.value) {
     controls.value.dispose()
@@ -347,10 +362,14 @@ const initThree = async () => {
   scene.value.add(dirLight)
 
   window.addEventListener('resize', onWindowResize)
-  animate()
+  startAnimation()
 }
 
 const animate = () => {
+  if (document.hidden) {
+    animationFrameId = null
+    return
+  }
   animationFrameId = requestAnimationFrame(animate)
   if (controls.value) controls.value.update()
   if (renderer.value && scene.value && camera.value) {
@@ -490,10 +509,7 @@ const toggleWireframe = () => {
 
 const disposeThree = () => {
   activeLoadToken += 1
-  if (animationFrameId) {
-    cancelAnimationFrame(animationFrameId)
-    animationFrameId = null
-  }
+  stopAnimation()
   window.removeEventListener('resize', onWindowResize)
 
   if (controls.value) {
@@ -526,9 +542,15 @@ const disposeThree = () => {
   }
 }
 
-onBeforeUnmount(() => disposeThree())
+onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+  disposeThree()
+})
 
-onMounted(() => fetchRecentRecords())
+onMounted(() => {
+  fetchRecentRecords()
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
 </script>
 
 <style scoped>

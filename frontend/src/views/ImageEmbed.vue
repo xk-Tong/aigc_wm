@@ -282,6 +282,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '../utils/request'
+import { resolvePublicUrl } from '../utils/publicUrl'
 import RecentRecords from '../components/RecentRecords.vue'
 
 // 用户在页面输入的生成参数。
@@ -409,7 +410,7 @@ const handleDownload = () => {
     return
   }
 
-  window.open(result.value.downloadUrl, '_blank', 'noopener,noreferrer')
+  window.open(resolvePublicUrl(result.value.downloadUrl), '_blank', 'noopener,noreferrer')
 }
 
 // 主流程：提交生成请求 -> 接收结果 -> 更新页面展示。
@@ -442,9 +443,9 @@ const handleGenerate = async () => {
     // 把后端返回数据转换成页面需要的展示结构。
     const generatedAt = payload.generated_at ? new Date(payload.generated_at) : new Date()
     result.value = {
-      originalUrl: payload.original_image_url,
-      watermarkedUrl: payload.watermarked_image_url,
-      downloadUrl: payload.download_url || payload.watermarked_image_url,
+      originalUrl: resolvePublicUrl(payload.original_image_url),
+      watermarkedUrl: resolvePublicUrl(payload.watermarked_image_url),
+      downloadUrl: resolvePublicUrl(payload.download_url || payload.watermarked_image_url),
       watermark: payload.watermark_bits ? binaryToHex(payload.watermark_bits) : formData.value.watermark,
       timeTaken: ((payload.elapsed_ms || 0) / 1000).toFixed(1),
       timestamp: generatedAt.toLocaleString('zh-CN', { hour12: false }),

@@ -5,7 +5,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from config.db_conf import async_engine
-from config.service_conf import BIZ_GS_STORAGE_ROOT, BIZ_IMAGE_STORAGE_ROOT, BIZ_MESH_STORAGE_ROOT, BIZ_POINTCLOUD_STORAGE_ROOT
+from config.service_conf import (
+    BIZ_GS_STORAGE_ROOT,
+    BIZ_IMAGE_STORAGE_ROOT,
+    BIZ_MESH_STORAGE_ROOT,
+    BIZ_POINTCLOUD_STORAGE_ROOT,
+    CORS_ALLOWED_ORIGINS,
+    CORS_ALLOW_CREDENTIALS,
+)
 from models.auth import Base
 from routers import auth, gs, image, log, mesh, pointcloud, profile, record, user
 
@@ -15,6 +22,14 @@ import models.operation_log  # noqa: F401
 
 # 创建 FastAPI 应用并挂载业务路由。
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ALLOWED_ORIGINS,
+    allow_credentials=CORS_ALLOW_CREDENTIALS,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.on_event("startup")
@@ -51,14 +66,6 @@ app.mount("/storage_mesh", StaticFiles(directory=BIZ_MESH_STORAGE_ROOT), name="s
 
 Path(BIZ_GS_STORAGE_ROOT).mkdir(parents=True, exist_ok=True)
 app.mount("/storage_gs", StaticFiles(directory=BIZ_GS_STORAGE_ROOT), name="storage_gs")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 @app.get("/")
 def read_root():

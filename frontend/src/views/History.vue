@@ -94,6 +94,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import request from '../utils/request'
+import { resolvePublicUrl } from '../utils/publicUrl'
 
 const records = ref([])
 const loading = ref(false)
@@ -118,7 +119,7 @@ const formatTime = (t) => {
 }
 
 const downloadFile = (url) => {
-  window.open(url, '_blank')
+  window.open(resolvePublicUrl(url), '_blank')
 }
 
 const handleSearch = async () => {

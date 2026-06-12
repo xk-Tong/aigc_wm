@@ -172,6 +172,7 @@
 import { ref, computed, onBeforeUnmount, onMounted, shallowRef } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '../utils/request'
+import { resolvePublicUrl } from '../utils/publicUrl'
 import RecentRecords from '../components/RecentRecords.vue'
 
 // 动态加载 gsplat 库，避免顶层 import 阻塞路由切换
@@ -214,6 +215,18 @@ const result = ref(null)
 // gsContainer 是 gsplat.js 的独占渲染容器，与 Vue 管理的 overlay DOM 隔离
 const gsContainer = ref(null)
 const viewer = shallowRef(null)
+
+const onVisibilityChange = () => {
+  const v = viewer.value
+  if (!v) return
+
+  if (document.hidden) {
+    if (v.selfDrivenModeRunning) v.stop()
+    return
+  }
+
+  if (!v.selfDrivenModeRunning) v.start()
+}
 
 const initViewer = async () => {
   if (!gsContainer.value) return
@@ -340,7 +353,7 @@ const handleDownload = async () => {
   }
 
   try {
-    const response = await fetch(result.value.downloadUrl)
+    const response = await fetch(resolvePublicUrl(result.value.downloadUrl))
     if (!response.ok) {
       ElMessage.error('下载 3DGS 文件失败')
       return
@@ -386,7 +399,8 @@ const handleGenerate = async () => {
 
     // 加载 3DGS 场景文件（异步，大文件可能耗时较长）
     await initViewer()
-    await loadGsFromUrl(payload.gs_url)
+    const gsUrl = resolvePublicUrl(payload.gs_url)
+    await loadGsFromUrl(gsUrl)
     isLoadingModel.value = false
 
     const generatedAt = payload.generated_at ? new Date(payload.generated_at) : new Date()
@@ -395,8 +409,8 @@ const handleGenerate = async () => {
       watermark: payload.watermark_bits ? binaryToHex(payload.watermark_bits) : formData.value.watermark,
       timeTaken: ((payload.elapsed_ms || 0) / 1000).toFixed(1),
       timestamp: generatedAt.toLocaleString('zh-CN', { hour12: false }),
-      downloadUrl: payload.download_url || payload.gs_url,
-      gsUrl: payload.gs_url,
+      downloadUrl: resolvePublicUrl(payload.download_url || payload.gs_url),
+      gsUrl,
       fileName: payload.gs_id ? `${payload.gs_id}.ply` : 'watermarked_3dgs.ply',
     }
 
@@ -412,9 +426,13 @@ const handleGenerate = async () => {
 
 // ==================== 生命周期清理 ====================
 
-onMounted(() => fetchRecentRecords())
+onMounted(() => {
+  fetchRecentRecords()
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
 
 onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
   // 路由离开时：先同步 stop 停掉渲染循环（避免卡顿），再异步 dispose
   // 组件卸载时释放 viewer 和 URL，防止路由切换后继续占用资源。
   const v = viewer.value

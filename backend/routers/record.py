@@ -6,8 +6,16 @@ from crud import record as crud_record
 from deps import get_current_user
 from models.auth import ROLE_HIERARCHY
 from schemas.record import TaskRecordListResponse, TaskRecordResponse
+from utils.public_url import normalize_public_url
 
 router = APIRouter(prefix="/api/v1/records", tags=["records"])
+
+
+def _serialize_record(record) -> dict:
+    data = TaskRecordResponse.model_validate(record).model_dump()
+    for field in ("original_file_url", "watermarked_file_url", "download_url"):
+        data[field] = normalize_public_url(data.get(field))
+    return data
 
 
 @router.get("", response_model=dict)
@@ -41,7 +49,7 @@ async def list_records(
         "code": 200,
         "message": "success",
         "data": {
-            "items": [TaskRecordResponse.model_validate(r).model_dump() for r in items],
+            "items": [_serialize_record(r) for r in items],
             "total": total,
             "page": page,
             "size": size,
@@ -67,5 +75,5 @@ async def get_record(
     return {
         "code": 200,
         "message": "success",
-        "data": TaskRecordResponse.model_validate(record).model_dump(),
+        "data": _serialize_record(record),
     }

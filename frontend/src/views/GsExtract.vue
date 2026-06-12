@@ -165,6 +165,18 @@ const gsContainer = ref(null)
 const viewer = shallowRef(null)
 let objectUrl = null
 
+const onVisibilityChange = () => {
+  const v = viewer.value
+  if (!v) return
+
+  if (document.hidden) {
+    if (v.selfDrivenModeRunning) v.stop()
+    return
+  }
+
+  if (!v.selfDrivenModeRunning) v.start()
+}
+
 // ==================== 计算属性 ====================
 
 const resultCardClass = computed(() => {
@@ -339,11 +351,15 @@ const startExtraction = async () => {
   }
 }
 
-onMounted(() => fetchRecentRecords())
+onMounted(() => {
+  fetchRecentRecords()
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
 
 // ==================== 生命周期清理 ====================
 
 onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
   // 卸载前主动释放本地预览 URL 和 viewer，避免切页后残留资源。
   if (objectUrl) {
     URL.revokeObjectURL(objectUrl)

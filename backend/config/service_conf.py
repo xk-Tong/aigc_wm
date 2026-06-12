@@ -1,11 +1,20 @@
 import os
 from pathlib import Path
 
+
+def _csv_env(name: str, default: str) -> list[str]:
+    return [item.strip() for item in os.getenv(name, default).split(",") if item.strip()]
+
 # 后端根目录，后续用于拼接默认存储路径。
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
+CORS_ALLOWED_ORIGINS = _csv_env("BIZ_CORS_ORIGINS", "*")
+CORS_ALLOW_CREDENTIALS = os.getenv("BIZ_CORS_ALLOW_CREDENTIALS", "false").lower() == "true"
+BIZ_PUBLIC_BASE_URL = os.getenv("BIZ_PUBLIC_BASE_URL", "").rstrip("/")
+
 # 算法服务基础地址：业务后端会把请求转发到这个地址。
-ALGO_IMAGE_BASE_URL = os.getenv("ALGO_IMAGE_BASE_URL", "http://127.0.0.1:8004").rstrip("/")
+# ALGO_IMAGE_BASE_URL = os.getenv("ALGO_IMAGE_BASE_URL", "http://127.0.0.1:8004").rstrip("/")
+ALGO_IMAGE_BASE_URL = os.getenv("ALGO_IMAGE_BASE_URL", "http://10.1.115.170:8004").rstrip("/")
 # 调用算法服务的超时时间（秒），避免请求长期阻塞。
 ALGO_IMAGE_TIMEOUT_SECONDS = float(os.getenv("ALGO_IMAGE_TIMEOUT_SECONDS", "120"))
 # 服务间鉴权密钥：如果算法服务开启校验，可在请求头中携带。

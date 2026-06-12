@@ -169,6 +169,7 @@
 import { ref, computed, onBeforeUnmount, onMounted, shallowRef } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '../utils/request'
+import { resolvePublicUrl } from '../utils/publicUrl'
 import RecentRecords from '../components/RecentRecords.vue'
 
 // ==================== Three.js 动态加载（避免顶层 import 阻塞路由切换） ====================
@@ -233,6 +234,27 @@ const controls = shallowRef(null)
 const meshObject = shallowRef(null)
 let animationFrameId = null
 
+const stopAnimation = () => {
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId)
+    animationFrameId = null
+  }
+}
+
+const startAnimation = () => {
+  if (!animationFrameId && renderer.value && scene.value && camera.value) {
+    animate()
+  }
+}
+
+const onVisibilityChange = () => {
+  if (document.hidden) {
+    stopAnimation()
+  } else {
+    startAnimation()
+  }
+}
+
 const initThree = async () => {
   if (!canvasContainer.value) return
 
@@ -275,10 +297,14 @@ const initThree = async () => {
   scene.value.add(dirLight)
 
   window.addEventListener('resize', onWindowResize)
-  animate()
+  startAnimation()
 }
 
 const animate = () => {
+  if (document.hidden) {
+    animationFrameId = null
+    return
+  }
   animationFrameId = requestAnimationFrame(animate)
   if (controls.value) controls.value.update()
   if (renderer.value && scene.value && camera.value) {
@@ -426,7 +452,7 @@ const handleDownload = () => {
     ElMessage.warning('暂无可下载的网格文件')
     return
   }
-  window.open(result.value.downloadUrl, '_blank', 'noopener,noreferrer')
+  window.open(resolvePublicUrl(result.value.downloadUrl), '_blank', 'noopener,noreferrer')
 }
 
 const handleGenerate = async () => {
@@ -454,12 +480,13 @@ const handleGenerate = async () => {
 
     // 先写入 result（不含 facesCount），processAndAddObject 回调会补充面片数
     const generatedAt = payload.generated_at ? new Date(payload.generated_at) : new Date()
+    const meshUrl = resolvePublicUrl(payload.mesh_url)
     result.value = {
       facesCount: 0,
       watermark: payload.watermark_bits ? binaryToHex(payload.watermark_bits) : formData.value.watermark,
       timeTaken: ((payload.elapsed_ms || 0) / 1000).toFixed(1),
       timestamp: generatedAt.toLocaleString('zh-CN', { hour12: false }),
-      downloadUrl: payload.download_url || payload.mesh_url,
+      downloadUrl: resolvePublicUrl(payload.download_url || payload.mesh_url),
     }
 
     isLoadingModel.value = true
@@ -488,7 +515,7 @@ const handleGenerate = async () => {
       }
 
       const fileFormat = payload.file_format || 'obj'
-      const url = payload.mesh_url
+      const url = meshUrl
 
       if (fileFormat === 'stl') {
         new _STLLoader().load(url, (geometry) => {
@@ -525,15 +552,16 @@ const handleGenerate = async () => {
 
 // ==================== 生命周期清理 ====================
 
-onMounted(() => fetchRecentRecords())
+onMounted(() => {
+  fetchRecentRecords()
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
 
 onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
   window.removeEventListener('resize', onWindowResize)
   // 立即停止渲染循环，避免卸载后继续占用主线程
-  if (animationFrameId) {
-    cancelAnimationFrame(animationFrameId)
-    animationFrameId = null
-  }
+  stopAnimation()
   // 同步清理场景对象（快速）
   if (meshObject.value) {
     if (scene.value) scene.value.remove(meshObject.value)

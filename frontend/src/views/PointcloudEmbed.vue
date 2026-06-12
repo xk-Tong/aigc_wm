@@ -192,6 +192,7 @@
 import { ref, computed, onBeforeUnmount, onMounted, shallowRef } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '../utils/request'
+import { resolvePublicUrl } from '../utils/publicUrl'
 import RecentRecords from '../components/RecentRecords.vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
@@ -246,6 +247,27 @@ const pointsObject = shallowRef(null)
 const axesHelper = shallowRef(null)
 let animationFrameId = null
 
+const stopAnimation = () => {
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId)
+    animationFrameId = null
+  }
+}
+
+const startAnimation = () => {
+  if (!animationFrameId && renderer.value && scene.value && camera.value) {
+    animate()
+  }
+}
+
+const onVisibilityChange = () => {
+  if (document.hidden) {
+    stopAnimation()
+  } else {
+    startAnimation()
+  }
+}
+
 const generateRandomWatermark = () => {
   const hexChars = '0123456789ABCDEF'
   let hexStr = ''
@@ -286,7 +308,7 @@ const handleDownload = () => {
     ElMessage.warning('暂无可下载点云文件')
     return
   }
-  window.open(result.value.downloadUrl, '_blank', 'noopener,noreferrer')
+  window.open(resolvePublicUrl(result.value.downloadUrl), '_blank', 'noopener,noreferrer')
 }
 
 const initThree = () => {
@@ -313,10 +335,14 @@ const initThree = () => {
   scene.value.add(axesHelper.value)
 
   window.addEventListener('resize', onWindowResize)
-  animate()
+  startAnimation()
 }
 
 const animate = () => {
+  if (document.hidden) {
+    animationFrameId = null
+    return
+  }
   animationFrameId = requestAnimationFrame(animate)
   if (controls.value) controls.value.update()
   if (renderer.value && scene.value && camera.value) {
@@ -452,7 +478,8 @@ const handleGenerate = async () => {
     isGenerating.value = false
 
     if (!scene.value) initThree()
-    loadPointCloudFromUrl(payload.pointcloud_url)
+    const pointcloudUrl = resolvePublicUrl(payload.pointcloud_url)
+    loadPointCloudFromUrl(pointcloudUrl)
 
     const generatedAt = payload.generated_at ? new Date(payload.generated_at) : new Date()
     result.value = {
@@ -461,7 +488,7 @@ const handleGenerate = async () => {
       watermark: payload.watermark_bits || formData.value.watermark,
       timeTaken: ((payload.elapsed_ms || 0) / 1000).toFixed(1),
       timestamp: generatedAt.toLocaleString('zh-CN', { hour12: false }),
-      downloadUrl: payload.download_url || payload.pointcloud_url,
+      downloadUrl: resolvePublicUrl(payload.download_url || payload.pointcloud_url),
     }
 
     ElMessage.success('点云生成并嵌入水印成功！')
@@ -474,11 +501,15 @@ const handleGenerate = async () => {
   }
 }
 
-onMounted(() => fetchRecentRecords())
+onMounted(() => {
+  fetchRecentRecords()
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
 
 onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
   window.removeEventListener('resize', onWindowResize)
-  if (animationFrameId) cancelAnimationFrame(animationFrameId)
+  stopAnimation()
   if (pointsObject.value) {
     if (scene.value) scene.value.remove(pointsObject.value)
     disposeObject3D(pointsObject.value)
