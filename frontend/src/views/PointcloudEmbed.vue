@@ -192,6 +192,7 @@
 import { ref, computed, onBeforeUnmount, onMounted, shallowRef } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '../utils/request'
+import { formatElapsedSeconds, startOperationTimer, waitForAnimationFrames } from '../utils/operationTiming'
 import { resolvePublicUrl } from '../utils/publicUrl'
 import RecentRecords from '../components/RecentRecords.vue'
 import * as THREE from 'three'
@@ -360,50 +361,54 @@ const onWindowResize = () => {
 }
 
 const loadPointCloudFromUrl = (url) => {
-  if (!scene.value) return
-
-  if (pointsObject.value) {
-    scene.value.remove(pointsObject.value)
-    disposeObject3D(pointsObject.value)
-    pointsObject.value = null
-  }
-
-  new PLYLoader().load(
-    url,
-    (geometry) => {
-      geometry.computeBoundingBox()
-      const box = geometry.boundingBox
-      const center = box.getCenter(new THREE.Vector3())
-      const size = box.getSize(new THREE.Vector3()).length()
-
-      geometry.translate(-center.x, -center.y, -center.z)
-
-      const scale = 4 / (size || 1)
-      const hasColor = geometry.hasAttribute('color')
-
-      const material = new THREE.PointsMaterial({
-        size: 0.03 / scale,
-        vertexColors: hasColor,
-        color: hasColor ? 0xffffff : 0x4f46e5,
-        transparent: true,
-        opacity: 0.8,
-      })
-
-      pointsObject.value = new THREE.Points(geometry, material)
-      pointsObject.value.scale.setScalar(scale)
-      pointsObject.value.rotation.x = Math.PI
-      scene.value.add(pointsObject.value)
-      resetView()
-
-      if (result.value) {
-        result.value.pointsCount = geometry.attributes.position.count
-      }
-    },
-    undefined,
-    () => {
-      ElMessage.error('点云文件加载失败，请检查文件是否损坏')
+  return new Promise((resolve, reject) => {
+    if (!scene.value) {
+      reject(new Error('点云预览场景初始化失败'))
+      return
     }
-  )
+
+    if (pointsObject.value) {
+      scene.value.remove(pointsObject.value)
+      disposeObject3D(pointsObject.value)
+      pointsObject.value = null
+    }
+
+    new PLYLoader().load(
+      url,
+      (geometry) => {
+        geometry.computeBoundingBox()
+        const box = geometry.boundingBox
+        const center = box.getCenter(new THREE.Vector3())
+        const size = box.getSize(new THREE.Vector3()).length()
+
+        geometry.translate(-center.x, -center.y, -center.z)
+
+        const scale = 4 / (size || 1)
+        const hasColor = geometry.hasAttribute('color')
+
+        const material = new THREE.PointsMaterial({
+          size: 0.03 / scale,
+          vertexColors: hasColor,
+          color: hasColor ? 0xffffff : 0x4f46e5,
+          transparent: true,
+          opacity: 0.8,
+        })
+
+        pointsObject.value = new THREE.Points(geometry, material)
+        pointsObject.value.scale.setScalar(scale)
+        pointsObject.value.rotation.x = Math.PI
+        scene.value.add(pointsObject.value)
+        resetView()
+        renderer.value?.render(scene.value, camera.value)
+
+        resolve(geometry.attributes.position.count)
+      },
+      undefined,
+      () => {
+        reject(new Error('点云文件加载失败，请检查文件是否损坏'))
+      }
+    )
+  })
 }
 
 const disposeMaterial = (material) => {
@@ -465,6 +470,7 @@ const handleGenerate = async () => {
 
   isGenerating.value = true
   result.value = null
+  const timerStartedAt = startOperationTimer()
 
   try {
     const response = await request.post('/api/v1/pointcloud/generate-watermarked', {
@@ -475,21 +481,21 @@ const handleGenerate = async () => {
     })
 
     const payload = response?.data || {}
-    isGenerating.value = false
 
     if (!scene.value) initThree()
     const pointcloudUrl = resolvePublicUrl(payload.pointcloud_url)
-    loadPointCloudFromUrl(pointcloudUrl)
+    const pointsCount = await loadPointCloudFromUrl(pointcloudUrl)
+    await waitForAnimationFrames(2)
 
     const generatedAt = payload.generated_at ? new Date(payload.generated_at) : new Date()
     result.value = {
-      // 算法端返回的点数不再由接口直接返回，在3D模型加载完成后更新
-      pointsCount: 0, 
+      pointsCount,
       watermark: payload.watermark_bits || formData.value.watermark,
-      timeTaken: ((payload.elapsed_ms || 0) / 1000).toFixed(1),
+      timeTaken: formatElapsedSeconds(timerStartedAt, 1),
       timestamp: generatedAt.toLocaleString('zh-CN', { hour12: false }),
       downloadUrl: resolvePublicUrl(payload.download_url || payload.pointcloud_url),
     }
+    isGenerating.value = false
 
     ElMessage.success('点云生成并嵌入水印成功！')
     fetchRecentRecords()

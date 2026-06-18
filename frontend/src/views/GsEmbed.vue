@@ -69,11 +69,11 @@
                 type="primary"
                 size="large"
                 class="w-full h-14! text-lg! rounded-xl! shadow-lg shadow-violet-500/30 bg-violet-600! hover:bg-violet-700! border-none!"
-                :loading="isGenerating"
+                :loading="isGenerationInProgress"
                 @click="handleGenerate"
               >
-                <el-icon class="mr-2" v-if="!isGenerating"><MagicStick /></el-icon>
-                {{ isGenerating ? '正在生成 3DGS 模型...' : '生成 3DGS 模型' }}
+                <el-icon class="mr-2" v-if="!isGenerationInProgress"><MagicStick /></el-icon>
+                {{ isGenerationInProgress ? '正在生成 3DGS 模型...' : '生成 3DGS 模型' }}
               </el-button>
             </div>
           </el-form>
@@ -96,13 +96,13 @@
           <!-- 预览容器：overlay 和 gsplat canvas 分离，避免 innerHTML 破坏 Vue DOM -->
           <div class="flex-1 rounded-2xl overflow-hidden relative border border-gray-100 bg-[#1a1a2e]">
             <!-- Vue 管理的 overlay 层 -->
-            <div v-if="!result && !isGenerating" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-[#f8fafc] z-10">
+            <div v-if="!result && !isGenerationInProgress" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-[#f8fafc] z-10">
               <el-icon class="text-5xl mb-2 opacity-50"><Histogram /></el-icon>
               <p>等待生成</p>
             </div>
-            <div v-else-if="isGenerating || isLoadingModel" class="absolute inset-0 flex flex-col items-center justify-center bg-[#f8fafc]/90 backdrop-blur-sm z-10">
+            <div v-else-if="isGenerationInProgress" class="absolute inset-0 flex flex-col items-center justify-center bg-[#f8fafc]/90 backdrop-blur-sm z-10">
               <el-icon class="text-4xl text-violet-500 mb-3 animate-spin"><Loading /></el-icon>
-              <p class="text-sm font-medium text-violet-600">{{ isLoadingModel ? '正在加载 3DGS 模型文件...' : '正在构建 3DGS 场景并嵌入水印...' }}</p>
+              <p class="text-sm font-medium text-violet-600">正在生成 3DGS 模型...</p>
             </div>
             <!-- gsplat.js 独占的渲染容器，与 Vue 管理的 DOM 完全隔离 -->
             <div ref="gsContainer" class="absolute inset-0"></div>
@@ -172,6 +172,7 @@
 import { ref, computed, onBeforeUnmount, onMounted, shallowRef } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '../utils/request'
+import { formatElapsedSeconds, startOperationTimer, waitForAnimationFrames } from '../utils/operationTiming'
 import { resolvePublicUrl } from '../utils/publicUrl'
 import RecentRecords from '../components/RecentRecords.vue'
 
@@ -208,6 +209,7 @@ const formRules = {
 
 const isGenerating = ref(false)
 const isLoadingModel = ref(false)
+const isGenerationInProgress = ref(false)
 const result = ref(null)
 
 // ==================== Gaussian Splats 3D ====================
@@ -261,10 +263,12 @@ const loadGsFromUrl = async (url) => {
       // 显式指定 PLY 格式，防止 URL 不以 .ply 结尾时格式检测失败
       format: GS3D.SceneFormat.Ply,
     })
+    viewer.value.forceRenderNextFrame?.()
     viewer.value.start()
+    await waitForAnimationFrames(3)
   } catch (e) {
     console.error('[GsEmbed] addSplatScene failed:', e)
-    ElMessage.error('3DGS 模型加载失败')
+    throw new Error('3DGS 模型加载失败')
   }
 }
 
@@ -272,7 +276,9 @@ const resetView = async () => {
   if (result.value && result.value.gsUrl) {
     await cleanupViewer()
     await initViewer()
-    loadGsFromUrl(result.value.gsUrl)
+    loadGsFromUrl(result.value.gsUrl).catch((err) => {
+      ElMessage.error(err?.message || '3DGS 模型加载失败')
+    })
   }
 }
 
@@ -296,10 +302,10 @@ const cleanupViewer = async () => {
   const v = viewer.value
   viewer.value = null
 
+  if (gsContainer.value) gsContainer.value.innerHTML = ''
+
   if (v) {
     try { v.stop() } catch { /* ignore */ }
-    // 清空 gsplat.js 渲染容器（此 div 不含 Vue 管理的子节点）
-    if (gsContainer.value) gsContainer.value.innerHTML = ''
     try { await v.dispose() } catch { /* ignore */ }
   }
 }
@@ -382,8 +388,10 @@ const handleGenerate = async () => {
 
   isGenerating.value = true
   isLoadingModel.value = false
+  isGenerationInProgress.value = true
   result.value = null
   await cleanupViewer()
+  const timerStartedAt = startOperationTimer()
 
   try {
     const response = await request.post('/api/v1/gs/generate-watermarked', {
@@ -394,31 +402,33 @@ const handleGenerate = async () => {
     }, { timeout: 200000 })
 
     const payload = response?.data || {}
-    isGenerating.value = false
     isLoadingModel.value = true
 
     // 加载 3DGS 场景文件（异步，大文件可能耗时较长）
     await initViewer()
     const gsUrl = resolvePublicUrl(payload.gs_url)
     await loadGsFromUrl(gsUrl)
-    isLoadingModel.value = false
 
     const generatedAt = payload.generated_at ? new Date(payload.generated_at) : new Date()
     result.value = {
       gaussianCount: payload.gaussian_count || 0,
       watermark: payload.watermark_bits ? binaryToHex(payload.watermark_bits) : formData.value.watermark,
-      timeTaken: ((payload.elapsed_ms || 0) / 1000).toFixed(1),
+      timeTaken: formatElapsedSeconds(timerStartedAt, 1),
       timestamp: generatedAt.toLocaleString('zh-CN', { hour12: false }),
       downloadUrl: resolvePublicUrl(payload.download_url || payload.gs_url),
       gsUrl,
       fileName: payload.gs_id ? `${payload.gs_id}.ply` : 'watermarked_3dgs.ply',
     }
+    isLoadingModel.value = false
+    isGenerating.value = false
+    isGenerationInProgress.value = false
 
     ElMessage.success('3DGS 模型生成并嵌入水印成功！')
     fetchRecentRecords()
   } catch (err) {
     isGenerating.value = false
     isLoadingModel.value = false
+    isGenerationInProgress.value = false
     const message = err?.response?.data?.detail || err?.message || '3DGS 模型生成失败，请稍后重试'
     ElMessage.error(message)
   }

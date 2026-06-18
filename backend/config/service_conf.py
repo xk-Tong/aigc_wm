@@ -25,7 +25,7 @@ BIZ_IMAGE_STORAGE_ROOT = os.getenv(
     str((BACKEND_ROOT / "storage").resolve()),
 )
 
-ALGO_POINTCLOUD_BASE_URL = os.getenv("ALGO_POINTCLOUD_BASE_URL", "http://127.0.0.1:8001").rstrip("/")
+ALGO_POINTCLOUD_BASE_URL = os.getenv("ALGO_POINTCLOUD_BASE_URL", "http://10.1.115.170:8001").rstrip("/")
 ALGO_POINTCLOUD_TIMEOUT_SECONDS = float(os.getenv("ALGO_POINTCLOUD_TIMEOUT_SECONDS", "180"))
 ALGO_POINTCLOUD_API_KEY = os.getenv("ALGO_POINTCLOUD_API_KEY", "")
 BIZ_POINTCLOUD_STORAGE_ROOT = os.getenv(
@@ -33,7 +33,7 @@ BIZ_POINTCLOUD_STORAGE_ROOT = os.getenv(
     str((BACKEND_ROOT / "storage_pointcloud").resolve()),
 )
 
-ALGO_MESH_BASE_URL = os.getenv("ALGO_MESH_BASE_URL", "http://127.0.0.1:8002").rstrip("/")
+ALGO_MESH_BASE_URL = os.getenv("ALGO_MESH_BASE_URL", "http://10.1.115.170:8002").rstrip("/")
 ALGO_MESH_TIMEOUT_SECONDS = float(os.getenv("ALGO_MESH_TIMEOUT_SECONDS", "180"))
 ALGO_MESH_API_KEY = os.getenv("ALGO_MESH_API_KEY", "")
 BIZ_MESH_STORAGE_ROOT = os.getenv(
@@ -42,7 +42,7 @@ BIZ_MESH_STORAGE_ROOT = os.getenv(
 )
 
 # 3DGS（3D Gaussian Splatting）算法服务配置。
-ALGO_GS_BASE_URL = os.getenv("ALGO_GS_BASE_URL", "http://127.0.0.1:8003").rstrip("/")
+ALGO_GS_BASE_URL = os.getenv("ALGO_GS_BASE_URL", "http://10.1.115.170:8003").rstrip("/")
 ALGO_GS_TIMEOUT_SECONDS = float(os.getenv("ALGO_GS_TIMEOUT_SECONDS", "180"))
 ALGO_GS_API_KEY = os.getenv("ALGO_GS_API_KEY", "")
 BIZ_GS_STORAGE_ROOT = os.getenv(

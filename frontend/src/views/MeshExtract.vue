@@ -141,6 +141,7 @@
 import { ref, computed, onBeforeUnmount, onMounted, shallowRef, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '../utils/request'
+import { formatElapsedSeconds, startOperationTimer } from '../utils/operationTiming'
 import RecentRecords from '../components/RecentRecords.vue'
 
 // ==================== Three.js 动态加载（避免顶层 import 阻塞路由切换） ====================
@@ -187,7 +188,10 @@ const meshObject = shallowRef(null)
 let animationFrameId = null
 
 const stopAnimation = () => {
-  stopAnimation()
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId)
+    animationFrameId = null
+  }
 }
 
 const startAnimation = () => {
@@ -275,6 +279,7 @@ const startExtraction = async () => {
 
   isExtracting.value = true
   result.value = null
+  const timerStartedAt = startOperationTimer()
 
   try {
     const formData = new FormData()
@@ -295,7 +300,7 @@ const startExtraction = async () => {
     result.value = {
       status: 'success',
       watermark: hexWatermark,
-      timeTaken: ((payload.elapsed_ms || 0) / 1000).toFixed(2),
+      timeTaken: formatElapsedSeconds(timerStartedAt, 2),
     }
     ElMessage.success('水印提取成功！')
     fetchRecentRecords()
