@@ -171,6 +171,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '../utils/request'
+import { formatElapsedSeconds, startOperationTimer } from '../utils/operationTiming'
 import RecentRecords from '../components/RecentRecords.vue'
 
 // 文件相关状态
@@ -275,6 +276,7 @@ const startExtraction = async () => {
 
   isExtracting.value = true
   result.value = null
+  const timerStartedAt = startOperationTimer()
 
   try {
     const formData = new FormData()
@@ -295,7 +297,7 @@ const startExtraction = async () => {
     result.value = {
       status: 'success',
       watermark: hexWatermark,
-      timeTaken: ((payload.elapsed_ms || 0) / 1000).toFixed(2),
+      timeTaken: formatElapsedSeconds(timerStartedAt, 2),
       timestamp: payload.extracted_at
         ? new Date(payload.extracted_at).toLocaleString('zh-CN', { hour12: false })
         : new Date().toLocaleString('zh-CN', { hour12: false }),

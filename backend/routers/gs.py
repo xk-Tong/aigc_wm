@@ -18,6 +18,7 @@ from schemas.gs import (
 )
 from services.algo_client import AlgoServiceError, algo_client
 from services.audit_log import log_operation
+from utils.public_url import build_public_url
 
 router = APIRouter(prefix="/api/v1/gs", tags=["gs"])
 
@@ -64,7 +65,7 @@ async def generate_watermarked_gs(
 
     # 前端直接使用可访问 URL 做 3D 预览和下载。
     relative_path = file_path.relative_to(Path(BIZ_GS_STORAGE_ROOT)).as_posix()
-    gs_url = str(request.url_for("storage_gs", path=relative_path))
+    gs_url = build_public_url(f"/storage_gs/{relative_path}")
 
     local_elapsed_ms = int((perf_counter() - started) * 1000)
     elapsed_ms = max(local_elapsed_ms, algo_elapsed_ms)

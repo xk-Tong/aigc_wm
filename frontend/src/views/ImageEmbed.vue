@@ -282,6 +282,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '../utils/request'
+import { formatElapsedSeconds, startOperationTimer, waitForImagePreviews } from '../utils/operationTiming'
+import { resolvePublicUrl } from '../utils/publicUrl'
 import RecentRecords from '../components/RecentRecords.vue'
 
 // 用户在页面输入的生成参数。
@@ -409,7 +411,7 @@ const handleDownload = () => {
     return
   }
 
-  window.open(result.value.downloadUrl, '_blank', 'noopener,noreferrer')
+  window.open(resolvePublicUrl(result.value.downloadUrl), '_blank', 'noopener,noreferrer')
 }
 
 // 主流程：提交生成请求 -> 接收结果 -> 更新页面展示。
@@ -424,6 +426,7 @@ const handleGenerate = async () => {
   isGenerating.value = true
   result.value = null
   resetZoom()
+  const timerStartedAt = startOperationTimer()
 
   try {
     // 把页面字段映射为后端接口字段。
@@ -437,20 +440,24 @@ const handleGenerate = async () => {
     })
 
     const payload = response?.data || {}
-    isGenerating.value = false
 
     // 把后端返回数据转换成页面需要的展示结构。
     const generatedAt = payload.generated_at ? new Date(payload.generated_at) : new Date()
+    const originalUrl = resolvePublicUrl(payload.original_image_url)
+    const watermarkedUrl = resolvePublicUrl(payload.watermarked_image_url)
+    await waitForImagePreviews([originalUrl, watermarkedUrl])
+
     result.value = {
-      originalUrl: payload.original_image_url,
-      watermarkedUrl: payload.watermarked_image_url,
-      downloadUrl: payload.download_url || payload.watermarked_image_url,
+      originalUrl,
+      watermarkedUrl,
+      downloadUrl: resolvePublicUrl(payload.download_url || payload.watermarked_image_url),
       watermark: payload.watermark_bits ? binaryToHex(payload.watermark_bits) : formData.value.watermark,
-      timeTaken: ((payload.elapsed_ms || 0) / 1000).toFixed(1),
+      timeTaken: formatElapsedSeconds(timerStartedAt, 1),
       timestamp: generatedAt.toLocaleString('zh-CN', { hour12: false }),
     }
     compareMode.value = 'side'
     sliderPos.value = 50
+    isGenerating.value = false
 
     ElMessage.success('图像生成并嵌入水印成功！')
     fetchRecentRecords()

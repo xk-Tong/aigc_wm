@@ -187,6 +187,7 @@
 import { ref, computed, onBeforeUnmount, onMounted, shallowRef, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '../utils/request'
+import { formatElapsedSeconds, startOperationTimer } from '../utils/operationTiming'
 import RecentRecords from '../components/RecentRecords.vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
@@ -208,6 +209,27 @@ const renderer = shallowRef(null)
 const controls = shallowRef(null)
 const pointsObject = shallowRef(null)
 let animationFrameId = null
+
+const stopAnimation = () => {
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId)
+    animationFrameId = null
+  }
+}
+
+const startAnimation = () => {
+  if (!animationFrameId && renderer.value && scene.value && camera.value) {
+    animate()
+  }
+}
+
+const onVisibilityChange = () => {
+  if (document.hidden) {
+    stopAnimation()
+  } else {
+    startAnimation()
+  }
+}
 let activeLoadToken = 0
 
 // --- 计算属性 ---
@@ -305,6 +327,7 @@ const startExtraction = async () => {
 
   isExtracting.value = true
   result.value = null
+  const timerStartedAt = startOperationTimer()
 
   try {
     const formData = new FormData()
@@ -323,7 +346,7 @@ const startExtraction = async () => {
     result.value = {
       status: 'success',
       watermark: watermarkBits,
-      timeTaken: ((payload.elapsed_ms || 0) / 1000).toFixed(2),
+      timeTaken: formatElapsedSeconds(timerStartedAt, 2),
       timestamp: payload.extracted_at
         ? new Date(payload.extracted_at).toLocaleString('zh-CN', { hour12: false })
         : new Date().toLocaleString('zh-CN', { hour12: false }),
@@ -368,10 +391,14 @@ const initThree = () => {
   // controls.value.autoRotateSpeed = 2.0
 
   window.addEventListener('resize', onWindowResize)
-  animate()
+  startAnimation()
 }
 
 const animate = () => {
+  if (document.hidden) {
+    animationFrameId = null
+    return
+  }
   animationFrameId = requestAnimationFrame(animate)
   if (controls.value) controls.value.update()
   if (renderer.value && scene.value && camera.value) {
@@ -612,8 +639,7 @@ const disposeObject3D = (object) => {
 const disposeThree = () => {
   activeLoadToken += 1
 
-  if (animationFrameId) cancelAnimationFrame(animationFrameId)
-  animationFrameId = null
+  stopAnimation()
   window.removeEventListener('resize', onWindowResize)
 
   if (controls.value) {

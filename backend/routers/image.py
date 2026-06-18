@@ -21,6 +21,7 @@ from schemas.image import (
 )
 from services.algo_client import AlgoServiceError, algo_client
 from services.audit_log import log_operation
+from utils.public_url import build_public_url
 
 # 图像业务路由：负责接收前端请求并编排“算法调用 + 文件落盘 + URL 返回”。
 router = APIRouter(prefix="/api/v1/image", tags=["image"])
@@ -95,8 +96,8 @@ async def generate_watermarked_image(
 
     # Step 5: 把磁盘相对路径转换为前端可直接访问的 URL。
     storage_root = Path(BIZ_IMAGE_STORAGE_ROOT)
-    orig_url = str(request.url_for("storage", path=orig_path.relative_to(storage_root).as_posix()))
-    wm_url = str(request.url_for("storage", path=wm_path.relative_to(storage_root).as_posix()))
+    orig_url = build_public_url(f"/storage/{orig_path.relative_to(storage_root).as_posix()}")
+    wm_url = build_public_url(f"/storage/{wm_path.relative_to(storage_root).as_posix()}")
 
     local_elapsed_ms = int((perf_counter() - started) * 1000)
     algo_elapsed_ms = int(algo_response.get("elapsed_ms") or 0)

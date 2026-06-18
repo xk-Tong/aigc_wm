@@ -95,13 +95,13 @@
           </div>
 
           <div class="flex-1 rounded-2xl overflow-hidden relative border border-gray-100 bg-[#1e1e1e]" ref="canvasContainer">
-            <div v-if="!result && !isGenerating" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-[#f8fafc] z-10">
+            <div v-if="!result && !isGenerating && !isLoadingModel" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-[#f8fafc] z-10">
               <el-icon class="text-5xl mb-2 opacity-50"><Box /></el-icon>
               <p>等待生成</p>
             </div>
             <div v-else-if="isGenerating || isLoadingModel" class="absolute inset-0 flex flex-col items-center justify-center bg-[#f8fafc]/90 backdrop-blur-sm z-10">
               <el-icon class="text-4xl text-teal-500 mb-3 animate-spin"><Loading /></el-icon>
-              <p class="text-sm font-medium text-teal-600">{{ isLoadingModel ? '正在加载 3D 模型文件...' : '正在构建 3D 网格并嵌入水印...' }}</p>
+              <p class="text-sm font-medium text-teal-600">正在构建 3D 网格并嵌入水印...</p>
             </div>
           </div>
         </div>
@@ -169,6 +169,8 @@
 import { ref, computed, onBeforeUnmount, onMounted, shallowRef } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '../utils/request'
+import { formatElapsedSeconds, startOperationTimer, waitForAnimationFrames } from '../utils/operationTiming'
+import { resolvePublicUrl } from '../utils/publicUrl'
 import RecentRecords from '../components/RecentRecords.vue'
 
 // ==================== Three.js 动态加载（避免顶层 import 阻塞路由切换） ====================
@@ -233,20 +235,51 @@ const controls = shallowRef(null)
 const meshObject = shallowRef(null)
 let animationFrameId = null
 
+const stopAnimation = () => {
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId)
+    animationFrameId = null
+  }
+}
+
+const startAnimation = () => {
+  if (!animationFrameId && renderer.value && scene.value && camera.value) {
+    animate()
+  }
+}
+
+const onVisibilityChange = () => {
+  if (document.hidden) {
+    stopAnimation()
+  } else {
+    startAnimation()
+  }
+}
+
 const initThree = async () => {
   if (!canvasContainer.value) return
 
   const { THREE, TrackballControls } = await ensureThreeLoaded()
 
   // 先清理旧实例
-  if (renderer.value) {
-    renderer.value.dispose()
-    renderer.value = null
-  }
+  stopAnimation()
+  window.removeEventListener('resize', onWindowResize)
   if (controls.value) {
     controls.value.dispose()
     controls.value = null
   }
+  if (meshObject.value) {
+    if (scene.value) scene.value.remove(meshObject.value)
+    disposeObject3D(meshObject.value)
+    meshObject.value = null
+  }
+  if (renderer.value) {
+    renderer.value.dispose()
+    if (canvasContainer.value) canvasContainer.value.innerHTML = ''
+    renderer.value = null
+  }
+  scene.value = null
+  camera.value = null
 
   scene.value = new THREE.Scene()
   scene.value.background = new THREE.Color(0x1e1e1e)
@@ -275,10 +308,14 @@ const initThree = async () => {
   scene.value.add(dirLight)
 
   window.addEventListener('resize', onWindowResize)
-  animate()
+  startAnimation()
 }
 
 const animate = () => {
+  if (document.hidden) {
+    animationFrameId = null
+    return
+  }
   animationFrameId = requestAnimationFrame(animate)
   if (controls.value) controls.value.update()
   if (renderer.value && scene.value && camera.value) {
@@ -321,7 +358,7 @@ const calculateFaces = (geometry) => {
 }
 
 const processAndAddObject = (object) => {
-  if (!scene.value || !_THREE) return
+  if (!scene.value || !_THREE) return 0
 
   const THREE = _THREE
 
@@ -347,7 +384,10 @@ const processAndAddObject = (object) => {
   object.traverse((child) => {
     if (child.isMesh) totalFaces += calculateFaces(child.geometry)
   })
-  if (result.value) result.value.facesCount = Math.round(totalFaces)
+  if (result.value && !result.value.facesCount) {
+    result.value.facesCount = Math.round(totalFaces)
+  }
+  return Math.round(totalFaces)
 }
 
 // ==================== 交互操作 ====================
@@ -426,7 +466,7 @@ const handleDownload = () => {
     ElMessage.warning('暂无可下载的网格文件')
     return
   }
-  window.open(result.value.downloadUrl, '_blank', 'noopener,noreferrer')
+  window.open(resolvePublicUrl(result.value.downloadUrl), '_blank', 'noopener,noreferrer')
 }
 
 const handleGenerate = async () => {
@@ -440,6 +480,7 @@ const handleGenerate = async () => {
   isGenerating.value = true
   isLoadingModel.value = false
   result.value = null
+  const timerStartedAt = startOperationTimer()
 
   try {
     const response = await request.post('/api/v1/mesh/generate-watermarked', {
@@ -450,27 +491,17 @@ const handleGenerate = async () => {
     }, { timeout: 200000 })
 
     const payload = response?.data || {}
-    isGenerating.value = false
-
-    // 先写入 result（不含 facesCount），processAndAddObject 回调会补充面片数
     const generatedAt = payload.generated_at ? new Date(payload.generated_at) : new Date()
-    result.value = {
-      facesCount: 0,
-      watermark: payload.watermark_bits ? binaryToHex(payload.watermark_bits) : formData.value.watermark,
-      timeTaken: ((payload.elapsed_ms || 0) / 1000).toFixed(1),
-      timestamp: generatedAt.toLocaleString('zh-CN', { hour12: false }),
-      downloadUrl: payload.download_url || payload.mesh_url,
-    }
-
+    const meshUrl = resolvePublicUrl(payload.mesh_url)
     isLoadingModel.value = true
 
     // 异步加载 Three.js 并初始化场景（不阻塞 UI 响应）
     if (!scene.value) await initThree()
 
     // 模型文件异步下载 + 解析
-    await new Promise((resolve, reject) => {
+    const facesCount = await new Promise((resolve, reject) => {
       const THREE = _THREE
-      if (!THREE || !scene.value) { isLoadingModel.value = false; resolve(); return }
+      if (!THREE || !scene.value) { resolve(0); return }
 
       const defaultMaterial = new THREE.MeshStandardMaterial({
         color: 0x0d9488,
@@ -479,16 +510,16 @@ const handleGenerate = async () => {
         side: THREE.DoubleSide,
       })
 
-      const onError = (err) => { isLoadingModel.value = false; reject(err) }
+      const onError = (err) => { reject(err) }
       const onLoaded = (object) => {
-        processAndAddObject(object)
-        isLoadingModel.value = false
+        const loadedFacesCount = processAndAddObject(object)
         resetView()
-        resolve()
+        renderer.value?.render(scene.value, camera.value)
+        resolve(loadedFacesCount)
       }
 
       const fileFormat = payload.file_format || 'obj'
-      const url = payload.mesh_url
+      const url = meshUrl
 
       if (fileFormat === 'stl') {
         new _STLLoader().load(url, (geometry) => {
@@ -512,6 +543,17 @@ const handleGenerate = async () => {
         }, undefined, onError)
       }
     })
+    await waitForAnimationFrames(2)
+
+    result.value = {
+      facesCount,
+      watermark: payload.watermark_bits ? binaryToHex(payload.watermark_bits) : formData.value.watermark,
+      timeTaken: formatElapsedSeconds(timerStartedAt, 1),
+      timestamp: generatedAt.toLocaleString('zh-CN', { hour12: false }),
+      downloadUrl: resolvePublicUrl(payload.download_url || payload.mesh_url),
+    }
+    isLoadingModel.value = false
+    isGenerating.value = false
 
     ElMessage.success('网格模型生成并嵌入水印成功！')
     fetchRecentRecords()
@@ -525,15 +567,16 @@ const handleGenerate = async () => {
 
 // ==================== 生命周期清理 ====================
 
-onMounted(() => fetchRecentRecords())
+onMounted(() => {
+  fetchRecentRecords()
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
 
 onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
   window.removeEventListener('resize', onWindowResize)
   // 立即停止渲染循环，避免卸载后继续占用主线程
-  if (animationFrameId) {
-    cancelAnimationFrame(animationFrameId)
-    animationFrameId = null
-  }
+  stopAnimation()
   // 同步清理场景对象（快速）
   if (meshObject.value) {
     if (scene.value) scene.value.remove(meshObject.value)
